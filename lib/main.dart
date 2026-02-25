@@ -1,121 +1,315 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:intl/intl.dart';
+
+// --- COLORES BASADOS EN EL MOCKUP ---
+const Color appBackground = Color(0xFF121212); // Fondo principal muy oscuro
+const Color cardBackground = Color(0xFF1E1E1E); // Gris oscuro para tarjetas
+const Color neonGreen = Color(0xFF00FF7F); // El verde de acento
+const Color textGrey = Color(0xFFAAAAAA);
 
 void main() {
-  runApp(const MyApp());
+  runApp(const GymAnalyticsApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class GymAnalyticsApp extends StatelessWidget {
+  const GymAnalyticsApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'GymAnalytics',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        scaffoldBackgroundColor: appBackground,
+        colorScheme: const ColorScheme.dark(
+          primary: neonGreen,
+          surface: appBackground,
+          surfaceContainer: cardBackground,
+        ),
+        useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: appBackground,
+          scrolledUnderElevation:
+              0, // Esto evita que cambie de color al hacer scroll
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: appBackground,
+          selectedItemColor: neonGreen,
+          unselectedItemColor: Colors.grey,
+          type: BottomNavigationBarType.fixed,
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MainLayout(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+// --- ESQUELETO PRINCIPAL (Bottom Nav) ---
+class MainLayout extends StatefulWidget {
+  const MainLayout({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _MainLayoutState extends State<MainLayout> {
+  int _currentIndex = 1; // Empezamos en History para ver lo que hemos hecho
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  final List<Widget> _screens = [
+    const Center(
+      child: Text('Dashboard (WIP)', style: TextStyle(color: Colors.white)),
+    ), // index 0
+    const WorkoutHistoryScreen(), // index 1
+    const Center(
+      child: Text('Analytics (WIP)', style: TextStyle(color: Colors.white)),
+    ), // index 2
+    const Center(
+      child: Text('Settings (WIP)', style: TextStyle(color: Colors.white)),
+    ), // index 3
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart),
+            label: 'Analytics',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_outlined),
+            activeIcon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: neonGreen,
+        foregroundColor: Colors.black, // "+" en negro como en el diseño
+        elevation: 8,
+        shape: const CircleBorder(),
+        onPressed: () {
+          // TODO: Abrir pantalla de crear entreno (EZE-88)
+        },
+        child: const Icon(Icons.add, size: 32),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation
+          .centerDocked, // Si quieres que esté centrado como en algunas apps, o quítalo para que vaya a la derecha. Lo dejo a la derecha por defecto en Material.
+    );
+  }
+}
+
+// --- PANTALLA HISTORY BASADA EN sc_history.png ---
+class WorkoutHistoryScreen extends StatefulWidget {
+  const WorkoutHistoryScreen({super.key});
+
+  @override
+  State<WorkoutHistoryScreen> createState() => _WorkoutHistoryScreenState();
+}
+
+class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
+  List<dynamic> _workouts = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchWorkouts();
+  }
+
+  Future<void> _fetchWorkouts() async {
+    try {
+      final url = Uri.parse(
+        'http://localhost:8080/api/workouts?email=eze@test.com&page=0&size=20',
+      );
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(
+          utf8.decode(response.bodyBytes),
+        );
+        setState(() {
+          _workouts = data['content'] ?? [];
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  String _formatDate(String isoString) {
+    try {
+      final date = DateTime.parse(isoString);
+      return DateFormat('MMM d, yyyy').format(date); // Ej: Oct 24, 2023
+    } catch (e) {
+      return '';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('History'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.filter_list, color: textGrey),
+            onPressed: () {},
+          ),
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      body: Column(
+        children: [
+          // Filtros (Chips horizontales)
+          Container(
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _buildChip('All Workouts', true),
+                const SizedBox(width: 8),
+                _buildChip('Templates', false),
+                const SizedBox(width: 8),
+                _buildChip('Routines', false),
+              ],
             ),
-          ],
+          ),
+          const SizedBox(height: 16),
+          // Lista de Entrenamientos
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: neonGreen),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16.0),
+                    itemCount: _workouts.length,
+                    itemBuilder: (context, index) {
+                      final workout = _workouts[index];
+                      return _buildWorkoutCard(workout);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChip(String label, bool isSelected) {
+    return Chip(
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.black : textGrey,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      backgroundColor: isSelected ? neonGreen : cardBackground,
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    );
+  }
+
+  Widget _buildWorkoutCard(dynamic workout) {
+    final exercisesCount = (workout['exercises'] as List?)?.length ?? 0;
+    final totalVolume = workout['totalVolume'] != null
+        ? '${double.parse(workout['totalVolume'].toString()).toStringAsFixed(0)} kg'
+        : '0 kg';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        // Línea verde a la izquierda como en el mockup
+        border: const Border(left: BorderSide(color: neonGreen, width: 4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            // Icono cuadrado redondeado
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.fitness_center, color: neonGreen),
+            ),
+            const SizedBox(width: 16),
+
+            // Info Central
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    workout['name'] ?? 'Entrenamiento',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_today,
+                        size: 14,
+                        color: textGrey,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatDate(workout['startTime'] ?? ''),
+                        style: const TextStyle(color: textGrey, fontSize: 13),
+                      ),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.line_weight, size: 14, color: textGrey),
+                      const SizedBox(width: 4),
+                      Text(
+                        totalVolume,
+                        style: const TextStyle(color: textGrey, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Icono flecha derecha
+            const Icon(Icons.chevron_right, color: textGrey),
+          ],
+        ),
       ),
     );
   }
