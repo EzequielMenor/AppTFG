@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../widgets/workout_card.dart';
 
@@ -24,26 +23,9 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
   Future<void> _fetchWorkouts() async {
     try {
-      // Obtenemos el token de la sesión actual de Supabase
-      final session = Supabase.instance.client.auth.currentSession;
-      final token = session?.accessToken;
-
-      if (token == null) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
-      }
-
-      // IMPORTANTE: Ya no mandamos el email en la URL, el backend lo saca del Token
-      final url = Uri.parse(
-        'http://localhost:8080/api/workouts?page=0&size=20',
-      );
-
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+      final response = await ApiClient.get(
+        '/api/workouts',
+        queryParams: {'page': '0', 'size': '20'},
       );
 
       if (response.statusCode == 200) {
