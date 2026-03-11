@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'package:provider/provider.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../widgets/workout_card.dart';
 
 class WorkoutHistoryScreen extends StatefulWidget {
@@ -48,6 +50,11 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<AuthProvider>().user;
+    final initial = (user?.email?.isNotEmpty == true)
+        ? user!.email![0].toUpperCase()
+        : '?';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('History'),
@@ -55,6 +62,21 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
           IconButton(
             icon: const Icon(Icons.filter_list, color: AppTheme.textGrey),
             onPressed: () {},
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: CircleAvatar(
+              radius: 16,
+              backgroundColor: AppTheme.neonGreen,
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
           ),
         ],
       ),
