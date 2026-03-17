@@ -1,0 +1,152 @@
+import 'dart:convert';
+
+import '../../../../core/network/api_client.dart';
+import '../models/analytics_models.dart';
+
+class AnalyticsDatasource {
+  /// Obtiene todos los ejercicios disponibles en el sistema.
+  Future<List<ExerciseModel>> getExercises() async {
+    final response = await ApiClient.get('/api/exercises');
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar ejercicios: ${response.statusCode}');
+    }
+    final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+    return data
+        .map((e) => ExerciseModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Devuelve la progresión de 1RM estimado para [exerciseId].
+  Future<List<Progression1RMModel>> get1RMProgression(int exerciseId) async {
+    final response = await ApiClient.get(
+      '/api/v1/analytics/1rm-progression',
+      queryParams: {
+        'exerciseId': exerciseId.toString(),
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar progresión 1RM: ${response.statusCode}');
+    }
+
+    final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+    return data
+        .map((e) => Progression1RMModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<AnalyticsSummaryModel> getSummary(DateTime from, DateTime to) async {
+    final response = await ApiClient.get(
+      '/api/v1/analytics/summary',
+      queryParams: {
+        'from': from.toUtc().toIso8601String(),
+        'to': to.toUtc().toIso8601String(),
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar resumen: ${response.statusCode}');
+    }
+
+    return AnalyticsSummaryModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+
+  Future<List<RecentPrModel>> getRecentPRs(DateTime from, DateTime to) async {
+    final response = await ApiClient.get(
+      '/api/v1/analytics/recent-prs',
+      queryParams: {
+        'from': from.toUtc().toIso8601String(),
+        'to': to.toUtc().toIso8601String(),
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar PRs recientes: ${response.statusCode}');
+    }
+
+    final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+    return data.map((e) => RecentPrModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<TopExerciseModel>> getTopExercises({int limit = 5}) async {
+    final response = await ApiClient.get(
+      '/api/v1/analytics/top-exercises',
+      queryParams: {
+        'limit': limit.toString(),
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar top ejercicios: ${response.statusCode}');
+    }
+
+    final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+    return data.map((e) => TopExerciseModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<WeeklyVolumeModel>> getWeeklyVolume(DateTime from, DateTime to) async {
+    final response = await ApiClient.get(
+      '/api/v1/analytics/weekly-volume',
+      queryParams: {
+        'from': from.toUtc().toIso8601String(),
+        'to': to.toUtc().toIso8601String(),
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar volumen semanal: ${response.statusCode}');
+    }
+
+    final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+    return data.map((e) => WeeklyVolumeModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<MuscleDistributionModel>> getMuscleDistribution(DateTime from, DateTime to) async {
+    final response = await ApiClient.get(
+      '/api/v1/analytics/muscle-distribution',
+      queryParams: {
+        'from': from.toUtc().toIso8601String(),
+        'to': to.toUtc().toIso8601String(),
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar distribución muscular: ${response.statusCode}');
+    }
+
+    final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+    return data.map((e) => MuscleDistributionModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<ConsistencyModel> getTrainingDays(DateTime from, DateTime to) async {
+    final response = await ApiClient.get(
+      '/api/v1/analytics/training-days',
+      queryParams: {
+        'from': from.toUtc().toIso8601String(),
+        'to': to.toUtc().toIso8601String(),
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar días de entrenamiento: ${response.statusCode}');
+    }
+
+    return ConsistencyModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+
+  Future<DurationStatsModel> getDurationStats(DateTime from, DateTime to) async {
+    final response = await ApiClient.get(
+      '/api/v1/analytics/duration-stats',
+      queryParams: {
+        'from': from.toUtc().toIso8601String(),
+        'to': to.toUtc().toIso8601String(),
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar estadísticas de duración: ${response.statusCode}');
+    }
+
+    return DurationStatsModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+}

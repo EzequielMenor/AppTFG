@@ -15,6 +15,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isImporting = false;
+  bool _isPatching = false;
   String? _statusMessage;
   bool? _isSuccess;
 
@@ -62,6 +63,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     } finally {
       setState(() => _isImporting = false);
+    }
+  }
+
+  Future<void> _patchEndTimes() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    if (result == null || result.files.single.path == null) return;
+
+    setState(() {
+      _isPatching = true;
+      _statusMessage = null;
+      _isSuccess = null;
+    });
+
+    try {
+      final response = await ApiClient.postMultipart(
+        '/api/import/patch-end-times',
+        filePath: result.files.single.path!,
+        fieldName: 'file',
+      );
+
+      if (response.statusCode == 200) {
+        final body = json.decode(response.body);
+        final int updated = body['updated'] ?? 0;
+        setState(() {
+          _isSuccess = true;
+          _statusMessage = updated > 0
+              ? '$updated entrenamientos con duración corregida.'
+              : 'No había duraciones que corregir (ya estaban actualizadas).';
+        });
+      } else {
+        setState(() {
+          _isSuccess = false;
+          _statusMessage = 'Error del servidor (${response.statusCode}).';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isSuccess = false;
+        _statusMessage = 'Error: $e';
+      });
+    } finally {
+      setState(() => _isPatching = false);
     }
   }
 
@@ -130,6 +176,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
             subtitle: 'Sube tu historial en formato CSV',
             onTap: _isImporting ? null : _importHevy,
             trailing: _isImporting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.neonGreen,
+                    ),
+                  )
+                : null,
+          ),
+
+          const SizedBox(height: 8),
+
+          // --- Corregir duraciones ---
+          _SettingsTile(
+            icon: Icons.timer_outlined,
+            title: 'Corregir duraciones',
+            subtitle: 'Actualiza end_time de entrenamientos existentes',
+            onTap: _isPatching ? null : _patchEndTimes,
+            trailing: _isPatching
                 ? const SizedBox(
                     width: 20,
                     height: 20,

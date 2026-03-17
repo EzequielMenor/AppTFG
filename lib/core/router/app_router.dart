@@ -6,6 +6,8 @@ import '../../features/auth/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
+import '../../features/analytics/presentation/screens/analytics_screen.dart';
+import '../../features/analytics/presentation/screens/one_rm_progression_screen.dart';
 import '../../features/workouts/presentation/screens/workout_history_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 
@@ -66,8 +68,13 @@ class AppRouter {
             StatefulShellBranch(routes: [
               GoRoute(
                 path: '/analytics',
-                builder: (context, state) =>
-                    const _PlaceholderScreen(title: 'Analíticas'),
+                builder: (context, state) => const AnalyticsScreen(),
+                routes: [
+                  GoRoute(
+                    path: '1rm',
+                    builder: (context, state) => const OneRmProgressionScreen(),
+                  ),
+                ],
               ),
             ]),
             StatefulShellBranch(routes: [

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'app.dart';
@@ -6,6 +7,8 @@ import 'features/auth/presentation/providers/auth_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('es_ES', null);
+  await initializeDateFormatting('en_US', null);
 
   // Inicializamos Supabase con las credenciales extraídas del backend
   await Supabase.initialize(
