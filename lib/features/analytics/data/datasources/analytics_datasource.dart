@@ -6,9 +6,34 @@ import '../models/analytics_models.dart';
 class AnalyticsDatasource {
   /// Obtiene todos los ejercicios disponibles en el sistema.
   Future<List<ExerciseModel>> getExercises() async {
-    final response = await ApiClient.get('/api/exercises');
+    final response = await ApiClient.get('/api/exercises', queryParams: {'size': '200'});
     if (response.statusCode != 200) {
       throw Exception('Error al cargar ejercicios: ${response.statusCode}');
+    }
+    final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+    return data
+        .map((e) => ExerciseModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Busca ejercicios con filtros opcionales y paginación.
+  Future<List<ExerciseModel>> getExercisesFiltered({
+    String? name,
+    String? muscleGroup,
+    String? equipment,
+    int page = 0,
+    int size = 20,
+  }) async {
+    final params = <String, String>{
+      'page': page.toString(),
+      'size': size.toString(),
+      if (name != null && name.isNotEmpty) 'name': name,
+      if (muscleGroup != null) 'muscleGroup': muscleGroup,
+      if (equipment != null) 'equipment': equipment,
+    };
+    final response = await ApiClient.get('/api/exercises', queryParams: params);
+    if (response.statusCode != 200) {
+      throw Exception('Error al buscar ejercicios: ${response.statusCode}');
     }
     final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
     return data

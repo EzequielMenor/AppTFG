@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/chart_theme.dart';
@@ -96,9 +96,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         backgroundColor: AppTheme.appBackground,
         actions: [
           IconButton(
-            icon: const Icon(Icons.show_chart, color: AppTheme.neonGreen),
-            onPressed: () => context.push('/analytics/1rm'),
-            tooltip: 'Progresión 1RM',
+            icon: const Icon(Icons.search),
+            tooltip: 'Buscar ejercicio',
+            onPressed: () => context.push('/analytics/exercises'),
           ),
         ],
       ),

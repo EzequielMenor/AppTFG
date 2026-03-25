@@ -2,18 +2,53 @@ class ExerciseModel {
   final int id;
   final String name;
   final String? muscleGroup;
+  final String? thumbnailUrl;
+  final String? videoUrl;
+  final List<String> aliases;
 
   const ExerciseModel({
     required this.id,
     required this.name,
     this.muscleGroup,
+    this.thumbnailUrl,
+    this.videoUrl,
+    this.aliases = const [],
   });
 
   factory ExerciseModel.fromJson(Map<String, dynamic> json) => ExerciseModel(
         id: json['id'] as int,
         name: json['name'] as String,
         muscleGroup: json['muscleGroup'] as String?,
+        thumbnailUrl: json['thumbnailUrl'] as String?,
+        videoUrl: json['videoUrl'] as String?,
+        aliases: (json['aliases'] as List<dynamic>?)
+                ?.whereType<String>()
+                .toList() ??
+            [],
       );
+
+  bool matchesName(String query) {
+    final q = normalize(query);
+    if (normalize(name) == q) return true;
+    return aliases.any((a) => normalize(a) == q);
+  }
+
+  static String normalize(String s) {
+    return s
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll('à', 'a')
+        .replaceAll('è', 'e')
+        .replaceAll('ì', 'i')
+        .replaceAll('ò', 'o')
+        .replaceAll('ù', 'u');
+  }
 
   @override
   String toString() => name;
