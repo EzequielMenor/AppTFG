@@ -23,7 +23,7 @@
       "type": "dart",
       "flutterMode": "debug",
       "args": [
-        "--dart-define=BACKEND_URL=https://gateway-bringing-supplier-investigate.trycloudflare.com"
+        "--dart-define=BACKEND_URL=https://leaving-him-survivor-zus.trycloudflare.com"
       ]
     },
     {

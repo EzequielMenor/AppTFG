@@ -187,7 +187,13 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
                             itemCount: _workouts.length,
                             itemBuilder: (context, index) {
                               final workout = _workouts[index];
-                              return WorkoutCard(workout: workout);
+                              return WorkoutCard(
+                                workout: workout,
+                                onDeleted: () => setState(() {
+                                  _workouts.removeWhere(
+                                      (w) => w['id'] == workout['id']);
+                                }),
+                              );
                             },
                           ),
           ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../analytics/presentation/screens/exercise_detail_screen.dart';
 
 class WorkoutDetailScreen extends StatefulWidget {
   final int workoutId;
@@ -277,6 +278,16 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     );
   }
 
+  Widget _exerciseIcon() => Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppTheme.neonGreen,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Icon(Icons.fitness_center, color: Colors.black, size: 22),
+      );
+
   Widget _buildStatCard(String label, String value) {
     return Expanded(
       child: Container(
@@ -316,6 +327,27 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     final List series = exerciseData['series'] ?? [];
     final String name = exerciseInfo['name'] ?? 'Ejercicio';
     final String muscleGroup = exerciseInfo['muscleGroup'] ?? '';
+    final String? thumbnailUrl = exerciseInfo['thumbnailUrl'] as String?;
+    final String? videoUrl = exerciseInfo['videoUrl'] as String?;
+    final int? exerciseId = exerciseInfo['id'] != null
+        ? (exerciseInfo['id'] as num).toInt()
+        : null;
+
+    void openDetail() {
+      if (exerciseId == null) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ExerciseDetailScreen(
+            exerciseId: exerciseId,
+            exerciseName: name,
+            muscleGroup: muscleGroup.isNotEmpty ? muscleGroup : null,
+            videoUrl: videoUrl,
+            thumbnailUrl: thumbnailUrl,
+          ),
+        ),
+      );
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -330,15 +362,20 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
             padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
             child: Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppTheme.neonGreen,
+                GestureDetector(
+                  onTap: openDetail,
+                  child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
+                    child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                        ? Image.network(
+                            thumbnailUrl,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _exerciseIcon(),
+                          )
+                        : _exerciseIcon(),
                   ),
-                  child: const Icon(Icons.fitness_center,
-                      color: Colors.black, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -361,6 +398,9 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                   icon: const Icon(Icons.more_vert,
                       color: Colors.grey, size: 20),
                   color: _cardBg,
+                  onSelected: (value) {
+                    if (value == 'info') openDetail();
+                  },
                   itemBuilder: (_) => [
                     const PopupMenuItem(
                       value: 'info',

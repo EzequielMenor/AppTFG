@@ -132,15 +132,15 @@ class MainLayout extends StatelessWidget {
   }
 
   Widget _buildFab() {
-    return FloatingActionButton(
-      backgroundColor: AppTheme.neonGreen,
-      foregroundColor: Colors.black,
-      elevation: 8,
-      shape: const CircleBorder(),
-      onPressed: () {
-        // TODO: Abrir pantalla de crear entreno
-      },
-      child: const Icon(Icons.add, size: 32),
+    return Builder(
+      builder: (context) => FloatingActionButton(
+        backgroundColor: AppTheme.neonGreen,
+        foregroundColor: Colors.black,
+        elevation: 8,
+        shape: const CircleBorder(),
+        onPressed: () => context.push('/pre-workout'),
+        child: const Icon(Icons.add, size: 32),
+      ),
     );
   }
 }

@@ -5,8 +5,9 @@ import '../../../../core/theme/app_theme.dart';
 
 class WorkoutCard extends StatelessWidget {
   final dynamic workout;
+  final VoidCallback? onDeleted;
 
-  const WorkoutCard({super.key, required this.workout});
+  const WorkoutCard({super.key, required this.workout, this.onDeleted});
 
   String _formatDate(String isoString) {
     try {
@@ -29,14 +30,15 @@ class WorkoutCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(
           12,
         ), // Ajusta al radio de tu tarjeta
-        onTap: () {
-          Navigator.push(
+        onTap: () async {
+          final deleted = await Navigator.push<bool>(
             context,
             MaterialPageRoute(
               builder: (context) =>
                   WorkoutDetailScreen(workoutId: workout['id']),
             ),
           );
+          if (deleted == true) onDeleted?.call();
         },
         child: Container(
           margin: const EdgeInsets.only(bottom: 12),
