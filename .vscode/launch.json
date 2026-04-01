@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "iOS Simulator (localhost)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "args": []
+    },
+    {
+      "name": "iPhone Físico (LAN 192.168.10.162)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "args": [
+        "--dart-define=BACKEND_URL=http://192.168.10.162:8080"
+      ]
+    },
+    {
+      "name": "iPhone Físico (Cloudflare Tunnel)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "args": [
+        "--dart-define=BACKEND_URL=https://albums-wants-priest-dedicated.trycloudflare.com"
+      ]
+    },
+    {
+      "name": "Android Emulator (10.0.2.2)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "args": []
+    }
+  ]
+}
