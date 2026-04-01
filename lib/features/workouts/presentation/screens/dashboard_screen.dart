@@ -384,7 +384,7 @@ class _PrTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${pr.estimated1Rm.toStringAsFixed(1)} kg',
+                '${pr.maxWeight.toStringAsFixed(1)} kg',
                 style: const TextStyle(
                     color: AppTheme.neonGreen,
                     fontSize: 15,

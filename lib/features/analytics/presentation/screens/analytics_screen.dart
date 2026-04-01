@@ -8,6 +8,9 @@ import '../../../../shared/widgets/charts/app_bar_chart.dart';
 import '../../data/datasources/analytics_datasource.dart';
 import '../../data/models/analytics_models.dart';
 import '../../domain/analytics_period.dart';
+import '../widgets/volume_density_chart.dart';
+import '../widgets/training_style_chart.dart';
+import '../widgets/weekly_rhythm_chart.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -31,6 +34,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   List<MuscleDistributionModel> _muscleDistribution = [];
   ConsistencyModel? _consistency;
   DurationStatsModel? _durationStats;
+  // EZE-168
+  VolumeDensityModel? _volumeDensity;
+  TrainingStyleModel? _trainingStyle;
+  WeeklyRhythmModel? _weeklyRhythm;
 
   @override
   void initState() {
@@ -61,6 +68,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         _datasource.getMuscleDistribution(range.from, range.to),
         _datasource.getTrainingDays(range.from, range.to),
         _datasource.getDurationStats(range.from, range.to),
+        _datasource.getVolumeDensity(),
+        _datasource.getTrainingStyle(range.from, range.to),
+        _datasource.getWeeklyRhythm(),
       ]);
 
       if (mounted) {
@@ -73,6 +83,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           _muscleDistribution = results[5] as List<MuscleDistributionModel>;
           _consistency = results[6] as ConsistencyModel;
           _durationStats = results[7] as DurationStatsModel;
+          _volumeDensity = results[8] as VolumeDensityModel;
+          _trainingStyle = results[9] as TrainingStyleModel;
+          _weeklyRhythm = results[10] as WeeklyRhythmModel;
           _loading = false;
         });
       }
@@ -142,6 +155,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           _buildConsistencyCard(),
           const SizedBox(height: 24),
           _buildDurationCard(),
+          const SizedBox(height: 24),
+          _buildVolumeDensityCard(),
+          const SizedBox(height: 24),
+          _buildTrainingStyleCard(),
+          const SizedBox(height: 24),
+          _buildWeeklyRhythmCard(),
           const SizedBox(height: 40),
         ],
       ),
@@ -231,7 +250,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(child: Text(pr.exerciseName, style: const TextStyle(color: Colors.white, fontSize: 14))),
-                Text('${pr.estimated1Rm.toStringAsFixed(1)} kg', style: const TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold)),
+                Text('${pr.maxWeight.toStringAsFixed(1)} kg', style: const TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold)),
               ],
             ),
           )),
@@ -246,7 +265,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 color: Colors.white.withOpacity(0.07),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text('Est. 1RM', style: TextStyle(color: AppTheme.textGrey, fontSize: 10, fontWeight: FontWeight.w600)),
+              child: const Text('Peso máx.', style: TextStyle(color: AppTheme.textGrey, fontSize: 10, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -493,6 +512,32 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       ],
     ),
   );
+
+  // ── EZE-168 section cards ────────────────────────────────────────────────
+
+  Widget _buildVolumeDensityCard() => _sectionCard(
+        title: 'DENSIDAD DE VOLUMEN',
+        icon: Icons.compress_rounded,
+        child: _volumeDensity == null
+            ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
+            : VolumeDensityChart(data: _volumeDensity!),
+      );
+
+  Widget _buildTrainingStyleCard() => _sectionCard(
+        title: 'ESTILO DE ENTRENAMIENTO',
+        icon: Icons.pie_chart_outline_rounded,
+        child: _trainingStyle == null
+            ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
+            : TrainingStyleChart(data: _trainingStyle!),
+      );
+
+  Widget _buildWeeklyRhythmCard() => _sectionCard(
+        title: 'RITMO SEMANAL',
+        icon: Icons.radar_rounded,
+        child: _weeklyRhythm == null
+            ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
+            : WeeklyRhythmChart(data: _weeklyRhythm!),
+      );
 
   // ── UI Helpers ──────────────────────────────────────────────────────────
 

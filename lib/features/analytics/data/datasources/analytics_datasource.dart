@@ -174,4 +174,46 @@ class AnalyticsDatasource {
 
     return DurationStatsModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
   }
+
+  // ── EZE-168 ────────────────────────────────────────────────────────────────
+
+  Future<VolumeDensityModel> getVolumeDensity() async {
+    final response = await ApiClient.get('/api/v1/analytics/volume-density');
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar densidad de volumen: ${response.statusCode}');
+    }
+    return VolumeDensityModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+
+  Future<TrainingStyleModel> getTrainingStyle(DateTime from, DateTime to) async {
+    final response = await ApiClient.get(
+      '/api/v1/analytics/training-style',
+      queryParams: {
+        'from': from.toUtc().toIso8601String(),
+        'to': to.toUtc().toIso8601String(),
+      },
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar estilo de entrenamiento: ${response.statusCode}');
+    }
+    return TrainingStyleModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+
+  Future<WeeklyRhythmModel> getWeeklyRhythm() async {
+    final response = await ApiClient.get('/api/v1/analytics/weekly-rhythm');
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar ritmo semanal: ${response.statusCode}');
+    }
+    return WeeklyRhythmModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+
+  // ── EZE-169 ────────────────────────────────────────────────────────────────
+
+  Future<ExerciseTrendModel> getExerciseTrend(int exerciseId) async {
+    final response = await ApiClient.get('/api/v1/analytics/exercise/$exerciseId/trend');
+    if (response.statusCode != 200) {
+      throw Exception('Error al cargar tendencia del ejercicio: ${response.statusCode}');
+    }
+    return ExerciseTrendModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
 }

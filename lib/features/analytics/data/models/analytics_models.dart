@@ -82,18 +82,18 @@ class AnalyticsSummaryModel {
 
 class RecentPrModel {
   final String exerciseName;
-  final double estimated1Rm;
+  final double maxWeight;
   final DateTime date;
 
   const RecentPrModel({
     required this.exerciseName,
-    required this.estimated1Rm,
+    required this.maxWeight,
     required this.date,
   });
 
   factory RecentPrModel.fromJson(Map<String, dynamic> json) => RecentPrModel(
         exerciseName: json['exerciseName'] as String,
-        estimated1Rm: (json['estimated1Rm'] as num).toDouble(),
+        maxWeight: (json['estimated1Rm'] as num? ?? json['maxWeight'] as num? ?? 0).toDouble(),
         date: DateTime.parse(json['date'] as String),
       );
 }
@@ -188,5 +188,76 @@ class DurationStatsModel {
       DurationStatsModel(
         avgMinutes: json['avgMinutes'] as int? ?? 0,
         longestMinutes: json['longestMinutes'] as int? ?? 0,
+      );
+}
+
+// ── EZE-168 models ────────────────────────────────────────────────────────────
+
+class VolumeDensityModel {
+  final double currentDensity;
+  final double previousDensity;
+  final double changePercent;
+
+  const VolumeDensityModel({
+    required this.currentDensity,
+    required this.previousDensity,
+    required this.changePercent,
+  });
+
+  factory VolumeDensityModel.fromJson(Map<String, dynamic> json) =>
+      VolumeDensityModel(
+        currentDensity: (json['currentDensity'] as num? ?? 0).toDouble(),
+        previousDensity: (json['previousDensity'] as num? ?? 0).toDouble(),
+        changePercent: (json['changePercent'] as num? ?? 0).toDouble(),
+      );
+}
+
+class TrainingStyleModel {
+  final int strengthSets;
+  final int hypertrophySets;
+  final int enduranceSets;
+
+  const TrainingStyleModel({
+    required this.strengthSets,
+    required this.hypertrophySets,
+    required this.enduranceSets,
+  });
+
+  factory TrainingStyleModel.fromJson(Map<String, dynamic> json) =>
+      TrainingStyleModel(
+        strengthSets: (json['strengthSets'] as num? ?? 0).toInt(),
+        hypertrophySets: (json['hypertrophySets'] as num? ?? 0).toInt(),
+        enduranceSets: (json['enduranceSets'] as num? ?? 0).toInt(),
+      );
+}
+
+class WeeklyRhythmModel {
+  /// Length 7: index 0=Mon … 6=Sun
+  final List<int> sessionsByDayOfWeek;
+
+  const WeeklyRhythmModel({required this.sessionsByDayOfWeek});
+
+  factory WeeklyRhythmModel.fromJson(Map<String, dynamic> json) {
+    final raw = (json['sessionsByDayOfWeek'] as List<dynamic>?)
+            ?.map((e) => (e as num).toInt())
+            .toList() ??
+        List.filled(7, 0);
+    return WeeklyRhythmModel(sessionsByDayOfWeek: raw);
+  }
+}
+
+// ── EZE-169 model ─────────────────────────────────────────────────────────────
+
+class ExerciseTrendModel {
+  /// NEW | OVERLOAD | STAGNANT | REGRESSION
+  final String status;
+  final String seed;
+
+  const ExerciseTrendModel({required this.status, required this.seed});
+
+  factory ExerciseTrendModel.fromJson(Map<String, dynamic> json) =>
+      ExerciseTrendModel(
+        status: json['status'] as String? ?? 'NEW',
+        seed: json['seed'] as String? ?? '',
       );
 }
