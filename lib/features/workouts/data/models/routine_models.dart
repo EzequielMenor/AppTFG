@@ -73,10 +73,12 @@ class RoutineModel {
 class WorkoutStartData {
   final List<ExerciseModel> exercises;
   final Map<int, int> targetSeries; // exerciseId → suggested sets
+  final String? routineName;
 
   const WorkoutStartData({
     required this.exercises,
     required this.targetSeries,
+    this.routineName,
   });
 
   factory WorkoutStartData.fromRoutine(RoutineModel routine) {
@@ -87,7 +89,11 @@ class WorkoutStartData {
       for (final re in routine.exercises)
         if (re.targetSeries != null) re.exerciseId: re.targetSeries!,
     };
-    return WorkoutStartData(exercises: exercises, targetSeries: targetSeries);
+    return WorkoutStartData(
+      exercises: exercises,
+      targetSeries: targetSeries,
+      routineName: routine.name,
+    );
   }
 
   static WorkoutStartData empty() {
