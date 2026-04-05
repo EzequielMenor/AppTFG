@@ -23,7 +23,7 @@
       "type": "dart",
       "flutterMode": "debug",
       "args": [
-        "--dart-define=BACKEND_URL=https://albums-wants-priest-dedicated.trycloudflare.com"
+        "--dart-define=BACKEND_URL=https://fits-hugh-than-keyboard.trycloudflare.com"
       ]
     },
     {
