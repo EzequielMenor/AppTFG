@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Cliente HTTP con reintentos automáticos, timeouts mejorados y resolución inteligente de IP.
-/// 
+///
 /// Características:
 /// - Reintentos automáticos (máx 3) con exponential backoff
 /// - Timeouts apropiados: 30s normal, 60s uploads
@@ -14,17 +14,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// - Logging detallado para debugging
 class ApiClient {
   static const String _envUrl = String.fromEnvironment('BACKEND_URL');
-  static const String _physicalDeviceIp = '192.168.10.162'; // Fallback si no hay env
-  
+  static const String _physicalDeviceIp =
+      '192.168.10.162'; // Fallback si no hay env
+
   // Configuración de reintentos
   static const int _maxRetries = 3;
   static const Duration _baseRetryDelay = Duration(milliseconds: 500);
-  
+
   // Timeouts (aumentados para evitar fallos en primera request)
   static const Duration _standardTimeout = Duration(seconds: 30);
   static const Duration _uploadTimeout = Duration(seconds: 60);
 
   static bool get _isIosSimulator =>
+      !kIsWeb &&
       Platform.isIOS &&
       Platform.environment.containsKey('SIMULATOR_DEVICE_NAME');
 
@@ -90,7 +92,8 @@ class ApiClient {
           _log('❌ $method $path - TimeoutException after $attempt attempts');
           rethrow;
         }
-        final delay = _baseRetryDelay * (1 << (attempt - 1)); // exponential backoff
+        final delay =
+            _baseRetryDelay * (1 << (attempt - 1)); // exponential backoff
         _log('⏳ $method $path timeout - retrying in ${delay.inMilliseconds}ms');
         await Future.delayed(delay);
       } catch (e) {
@@ -125,11 +128,13 @@ class ApiClient {
 
   static Future<http.Response> post(String path, {Object? body}) async {
     return _executeWithRetry(
-      () => http.post(
-        Uri.parse('$_baseUrl$path'),
-        headers: _headers(),
-        body: body != null ? jsonEncode(body) : null,
-      ).timeout(_standardTimeout),
+      () => http
+          .post(
+            Uri.parse('$_baseUrl$path'),
+            headers: _headers(),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(_standardTimeout),
       'POST',
       path,
     );
@@ -137,11 +142,13 @@ class ApiClient {
 
   static Future<http.Response> put(String path, {Object? body}) async {
     return _executeWithRetry(
-      () => http.put(
-        Uri.parse('$_baseUrl$path'),
-        headers: _headers(),
-        body: body != null ? jsonEncode(body) : null,
-      ).timeout(_standardTimeout),
+      () => http
+          .put(
+            Uri.parse('$_baseUrl$path'),
+            headers: _headers(),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(_standardTimeout),
       'PUT',
       path,
     );
@@ -149,7 +156,9 @@ class ApiClient {
 
   static Future<http.Response> delete(String path) async {
     return _executeWithRetry(
-      () => http.delete(Uri.parse('$_baseUrl$path'), headers: _headers()).timeout(_standardTimeout),
+      () => http
+          .delete(Uri.parse('$_baseUrl$path'), headers: _headers())
+          .timeout(_standardTimeout),
       'DELETE',
       path,
     );
@@ -165,11 +174,16 @@ class ApiClient {
         final session = Supabase.instance.client.auth.currentSession;
         final token = session?.accessToken;
 
-        final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl$path'));
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse('$_baseUrl$path'),
+        );
         if (token != null) {
           request.headers['Authorization'] = 'Bearer $token';
         }
-        request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+        request.files.add(
+          await http.MultipartFile.fromPath(fieldName, filePath),
+        );
 
         final streamed = await request.send().timeout(_uploadTimeout);
         return http.Response.fromStream(streamed);
