@@ -47,8 +47,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.cardBackground,
-        title: const Text('Nombre de usuario',
-            style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Nombre de usuario',
+          style: TextStyle(color: Colors.white),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -57,7 +59,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             hintText: 'Tu nombre',
             hintStyle: const TextStyle(color: AppTheme.textGrey),
             enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppTheme.neonGreen.withOpacity(0.5)),
+              borderSide: BorderSide(
+                color: AppTheme.neonGreen.withOpacity(0.5),
+              ),
             ),
             focusedBorder: const UnderlineInputBorder(
               borderSide: BorderSide(color: AppTheme.neonGreen),
@@ -67,13 +71,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar',
-                style: TextStyle(color: AppTheme.textGrey)),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: AppTheme.textGrey),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Guardar',
-                style: TextStyle(color: AppTheme.neonGreen)),
+            child: const Text(
+              'Guardar',
+              style: TextStyle(color: AppTheme.neonGreen),
+            ),
           ),
         ],
       ),
@@ -113,10 +121,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final body = json.decode(response.body);
         final int success = body['successCount'] ?? 0;
         final int failed = body['failedCount'] ?? 0;
+        final List<dynamic> failedRowsRaw = body['failedRows'] ?? [];
+        final int failedRowsCount = failedRowsRaw.length;
+        final String failedPreview = failedRowsRaw
+            .take(3)
+            .map((e) => e.toString())
+            .join('\n');
         setState(() {
           _isSuccess = success > 0;
           _statusMessage = success > 0
-              ? 'Importadas $success series correctamente. Fallos: $failed'
+              ? 'Importadas $success series correctamente. Fallos: $failed (detalles: $failedRowsCount)'
+                    '${failedPreview.isNotEmpty ? '\n\nPrimeros fallos:\n$failedPreview' : ''}'
               : 'Nada importado. $failed filas fallaron.';
         });
       } else {
@@ -140,8 +155,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.cardBackground,
-        title: const Text('¿Borrar todos los datos?',
-            style: TextStyle(color: Colors.white)),
+        title: const Text(
+          '¿Borrar todos los datos?',
+          style: TextStyle(color: Colors.white),
+        ),
         content: const Text(
           'Se eliminarán todos tus entrenamientos. Esta acción no se puede deshacer.',
           style: TextStyle(color: AppTheme.textGrey),
@@ -149,13 +166,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar',
-                style: TextStyle(color: AppTheme.textGrey)),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: AppTheme.textGrey),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Borrar todo',
-                style: TextStyle(color: Colors.redAccent)),
+            child: const Text(
+              'Borrar todo',
+              style: TextStyle(color: Colors.redAccent),
+            ),
           ),
         ],
       ),
@@ -198,8 +219,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = context.watch<AuthProvider>().user;
     final email = user?.email ?? '';
     final displayName = _displayName?.isNotEmpty == true ? _displayName! : null;
-    final initial =
-        (displayName ?? email).isNotEmpty ? (displayName ?? email)[0].toUpperCase() : '?';
+    final initial = (displayName ?? email).isNotEmpty
+        ? (displayName ?? email)[0].toUpperCase()
+        : '?';
 
     return Scaffold(
       appBar: AppBar(
@@ -245,14 +267,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      const Icon(Icons.edit, size: 14, color: AppTheme.textGrey),
+                      const Icon(
+                        Icons.edit,
+                        size: 14,
+                        color: AppTheme.textGrey,
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   email,
-                  style: const TextStyle(color: AppTheme.textGrey, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppTheme.textGrey,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -272,10 +301,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
 
           // --- Unidades de peso ---
-          _UnitToggleTile(
-            selected: _weightUnit,
-            onSelect: _toggleWeightUnit,
-          ),
+          _UnitToggleTile(selected: _weightUnit, onSelect: _toggleWeightUnit),
 
           const SizedBox(height: 36),
           const _SectionHeader(title: 'Datos'),
@@ -286,9 +312,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: 'Importar desde Hevy',
             subtitle: 'Sube tu historial en formato CSV',
             onTap: _isImporting ? null : _importHevy,
-            trailing: _isImporting
-                ? const _LoadingIndicator()
-                : null,
+            trailing: _isImporting ? const _LoadingIndicator() : null,
           ),
 
           const SizedBox(height: 8),
@@ -479,9 +503,17 @@ class _UnitToggleTile extends StatelessWidget {
               ),
             ),
           ),
-          _UnitButton(label: 'kg', selected: selected == 'kg', onTap: () => onSelect('kg')),
+          _UnitButton(
+            label: 'kg',
+            selected: selected == 'kg',
+            onTap: () => onSelect('kg'),
+          ),
           const SizedBox(width: 8),
-          _UnitButton(label: 'lb', selected: selected == 'lb', onTap: () => onSelect('lb')),
+          _UnitButton(
+            label: 'lb',
+            selected: selected == 'lb',
+            onTap: () => onSelect('lb'),
+          ),
         ],
       ),
     );
