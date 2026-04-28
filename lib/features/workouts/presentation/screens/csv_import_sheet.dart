@@ -42,7 +42,7 @@ class _ParsedRoutine {
   bool selected;
 
   _ParsedRoutine({required this.name, required this.exercises})
-      : selected = true;
+    : selected = true;
 
   int get matchedCount => exercises.where((e) => e.matched != null).length;
 }
@@ -74,8 +74,9 @@ List<_ParsedRoutine> extractRoutinesFromCsv(String content) {
     final title = titleIdx < row.length ? row[titleIdx] : '';
     final startTime = startIdx < row.length ? row[startIdx] : 'unknown';
     final exName = row[exIdx];
-    final setIndex =
-        setIdxCol >= 0 && setIdxCol < row.length ? (int.tryParse(row[setIdxCol]) ?? 0) : 0;
+    final setIndex = setIdxCol >= 0 && setIdxCol < row.length
+        ? (int.tryParse(row[setIdxCol]) ?? 0)
+        : 0;
 
     if (title.isEmpty || exName.isEmpty) continue;
 
@@ -149,12 +150,10 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
           // 2. Partial match fallback (normalized)
           if (ex.matched == null) {
             final q = ExerciseModel.normalize(ex.csvName);
-            ex.matched = dbExercises
-                .where((e) {
-                  final n = ExerciseModel.normalize(e.name);
-                  return n.contains(q) || q.contains(n);
-                })
-                .firstOrNull;
+            ex.matched = dbExercises.where((e) {
+              final n = ExerciseModel.normalize(e.name);
+              return n.contains(q) || q.contains(n);
+            }).firstOrNull;
           }
         }
       }
@@ -195,7 +194,11 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
             return {
               'exerciseId': entry.value.matched!.id,
               'exerciseOrder': entry.key + 1,
-              'targetSeries': entry.value.sets,
+              'targetSeries': entry.value.sets, // legacy compat
+              'series': List.generate(
+                entry.value.sets,
+                (j) => {'setOrder': j + 1},
+              ),
             };
           }).toList(),
         );
@@ -212,11 +215,12 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
       widget.onImported();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(errors.isEmpty
-              ? '$saved rutina${saved != 1 ? 's' : ''} importada${saved != 1 ? 's' : ''}'
-              : '$saved importada${saved != 1 ? 's' : ''}. Errores: ${errors.join(', ')}'),
-          backgroundColor:
-              errors.isEmpty ? AppTheme.neonGreen : Colors.orange,
+          content: Text(
+            errors.isEmpty
+                ? '$saved rutina${saved != 1 ? 's' : ''} importada${saved != 1 ? 's' : ''}'
+                : '$saved importada${saved != 1 ? 's' : ''}. Errores: ${errors.join(', ')}',
+          ),
+          backgroundColor: errors.isEmpty ? AppTheme.neonGreen : Colors.orange,
         ),
       );
     }
@@ -253,14 +257,17 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
                   const Text(
                     'Importar desde CSV',
                     style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold),
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const Spacer(),
                   if (!_loading && !_saving)
                     TextButton(
-                      onPressed: _routines.any((r) => r.selected) ? _save : null,
+                      onPressed: _routines.any((r) => r.selected)
+                          ? _save
+                          : null,
                       child: Text(
                         'Guardar',
                         style: TextStyle(
@@ -277,7 +284,9 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppTheme.neonGreen),
+                        strokeWidth: 2,
+                        color: AppTheme.neonGreen,
+                      ),
                     ),
                 ],
               ),
@@ -289,35 +298,40 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          CircularProgressIndicator(
-                              color: AppTheme.neonGreen),
+                          CircularProgressIndicator(color: AppTheme.neonGreen),
                           SizedBox(height: 12),
-                          Text('Analizando CSV...',
-                              style: TextStyle(color: Colors.grey)),
+                          Text(
+                            'Analizando CSV...',
+                            style: TextStyle(color: Colors.grey),
+                          ),
                         ],
                       ),
                     )
                   : _error != null
-                      ? Center(
-                          child: Text(_error!,
-                              style: const TextStyle(color: Colors.red)))
-                      : _routines.isEmpty
-                          ? const Center(
-                              child: Text('No se encontraron rutinas.',
-                                  style: TextStyle(color: Colors.grey)))
-                          : ListView.builder(
-                              controller: scrollCtrl,
-                              padding: const EdgeInsets.all(16),
-                              itemCount: _routines.length,
-                              itemBuilder: (_, i) =>
-                                  _RoutineImportCard(
-                                    routine: _routines[i],
-                                    onToggle: () => setState(() {
-                                      _routines[i].selected =
-                                          !_routines[i].selected;
-                                    }),
-                                  ),
-                            ),
+                  ? Center(
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    )
+                  : _routines.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No se encontraron rutinas.',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollCtrl,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _routines.length,
+                      itemBuilder: (_, i) => _RoutineImportCard(
+                        routine: _routines[i],
+                        onToggle: () => setState(() {
+                          _routines[i].selected = !_routines[i].selected;
+                        }),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -330,8 +344,7 @@ class _RoutineImportCard extends StatelessWidget {
   final _ParsedRoutine routine;
   final VoidCallback onToggle;
 
-  const _RoutineImportCard(
-      {required this.routine, required this.onToggle});
+  const _RoutineImportCard({required this.routine, required this.onToggle});
 
   @override
   Widget build(BuildContext context) {
@@ -364,18 +377,17 @@ class _RoutineImportCard extends StatelessWidget {
                   child: Text(
                     routine.name,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
                 Icon(
                   routine.selected
                       ? Icons.check_circle
                       : Icons.radio_button_unchecked,
-                  color: routine.selected
-                      ? AppTheme.neonGreen
-                      : Colors.grey,
+                  color: routine.selected ? AppTheme.neonGreen : Colors.grey,
                   size: 22,
                 ),
               ],
@@ -406,7 +418,9 @@ class _RoutineImportCard extends StatelessWidget {
                 final ok = ex.matched != null;
                 return Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: ok
                         ? const Color(0xFF2A3A2A)

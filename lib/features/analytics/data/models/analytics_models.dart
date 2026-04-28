@@ -5,6 +5,7 @@ class ExerciseModel {
   final String? thumbnailUrl;
   final String? videoUrl;
   final List<String> aliases;
+  final List<String> secondaryMuscles;
 
   const ExerciseModel({
     required this.id,
@@ -13,19 +14,33 @@ class ExerciseModel {
     this.thumbnailUrl,
     this.videoUrl,
     this.aliases = const [],
+    this.secondaryMuscles = const [],
   });
 
+  /// Parses a dynamic value into a List<String>.
+  /// Handles: List → filter strings, String → split by comma, null/other → [].
+  static List<String> _parseStringList(dynamic value) {
+    if (value == null) return [];
+    if (value is List) return value.whereType<String>().toList();
+    if (value is String) {
+      return value
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    }
+    return [];
+  }
+
   factory ExerciseModel.fromJson(Map<String, dynamic> json) => ExerciseModel(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        muscleGroup: json['muscleGroup'] as String?,
-        thumbnailUrl: json['thumbnailUrl'] as String?,
-        videoUrl: json['videoUrl'] as String?,
-        aliases: (json['aliases'] as List<dynamic>?)
-                ?.whereType<String>()
-                .toList() ??
-            [],
-      );
+    id: json['id'] as int,
+    name: json['name'] as String,
+    muscleGroup: json['muscleGroup'] as String?,
+    thumbnailUrl: json['thumbnailUrl'] as String?,
+    videoUrl: json['videoUrl'] as String?,
+    aliases: _parseStringList(json['aliases']),
+    secondaryMuscles: _parseStringList(json['secondaryMuscles']),
+  );
 
   bool matchesName(String query) {
     final q = normalize(query);
@@ -71,7 +86,10 @@ class AnalyticsSummaryModel {
   final int sessionCount;
   final double totalVolume;
 
-  const AnalyticsSummaryModel({required this.sessionCount, required this.totalVolume});
+  const AnalyticsSummaryModel({
+    required this.sessionCount,
+    required this.totalVolume,
+  });
 
   factory AnalyticsSummaryModel.fromJson(Map<String, dynamic> json) =>
       AnalyticsSummaryModel(
@@ -92,10 +110,11 @@ class RecentPrModel {
   });
 
   factory RecentPrModel.fromJson(Map<String, dynamic> json) => RecentPrModel(
-        exerciseName: json['exerciseName'] as String,
-        maxWeight: (json['estimated1Rm'] as num? ?? json['maxWeight'] as num? ?? 0).toDouble(),
-        date: DateTime.parse(json['date'] as String),
-      );
+    exerciseName: json['exerciseName'] as String,
+    maxWeight: (json['estimated1Rm'] as num? ?? json['maxWeight'] as num? ?? 0)
+        .toDouble(),
+    date: DateTime.parse(json['date'] as String),
+  );
 }
 
 class TopExerciseModel {
@@ -109,7 +128,8 @@ class TopExerciseModel {
     required this.best1Rm,
   });
 
-  factory TopExerciseModel.fromJson(Map<String, dynamic> json) => TopExerciseModel(
+  factory TopExerciseModel.fromJson(Map<String, dynamic> json) =>
+      TopExerciseModel(
         rank: json['rank'] as int,
         exerciseName: json['exerciseName'] as String,
         best1Rm: (json['best1Rm'] as num).toDouble(),
@@ -165,7 +185,7 @@ class ConsistencyModel {
     final trainingDays = (json['trainingDays'] as List)
         .map((d) => DateTime.parse(d as String))
         .toList();
-    
+
     // avgDaysPerWeek is often calculated in client if needed, or taken from json if present
     // According to spec, it is calculated in client: trainingDays.length / (periodoEnDías / 7)
     // But for the model, we can just take it if provided or leave it to the screen.
@@ -182,7 +202,10 @@ class DurationStatsModel {
   final int avgMinutes;
   final int longestMinutes;
 
-  const DurationStatsModel({required this.avgMinutes, required this.longestMinutes});
+  const DurationStatsModel({
+    required this.avgMinutes,
+    required this.longestMinutes,
+  });
 
   factory DurationStatsModel.fromJson(Map<String, dynamic> json) =>
       DurationStatsModel(
@@ -238,7 +261,8 @@ class WeeklyRhythmModel {
   const WeeklyRhythmModel({required this.sessionsByDayOfWeek});
 
   factory WeeklyRhythmModel.fromJson(Map<String, dynamic> json) {
-    final raw = (json['sessionsByDayOfWeek'] as List<dynamic>?)
+    final raw =
+        (json['sessionsByDayOfWeek'] as List<dynamic>?)
             ?.map((e) => (e as num).toInt())
             .toList() ??
         List.filled(7, 0);

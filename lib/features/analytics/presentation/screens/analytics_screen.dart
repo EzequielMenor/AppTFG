@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/cache/cache_manager.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/chart_theme.dart';
 import '../../../../shared/widgets/charts/app_bar_chart.dart';
@@ -26,6 +27,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   bool _loading = true;
   String? _error;
 
+  /// True cuando los datos mostrados provienen de cache stale (background revalidating).
+  bool _isUsingStaleData = false;
+
+  /// True después del primer load exitoso — permite SWR en cambios de período.
+  bool _hasLoadedOnce = false;
+
   AnalyticsSummaryModel? _summary;
   List<RecentPrModel> _recentPRs = [];
   List<TopExerciseModel> _topExercises = [];
@@ -45,20 +52,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     _loadAllData();
   }
 
+  // ── Data loading with SWR cache ──────────────────────────────────────
+
+  /// Pull-to-refresh: limpia cache y carga fresco desde API.
   Future<void> _loadAllData() async {
+    // Limpiar todo el cache de analytics para forzar fetch fresco
+    await CacheManager.clearAllCache();
+
     setState(() {
       _loading = true;
       _error = null;
+      _isUsingStaleData = false;
     });
 
     final range = _period.dateRange();
-    
-    // Calculate previous period range for volume comparison
     final duration = range.to.difference(range.from);
     final prevFrom = range.from.subtract(duration);
     final prevTo = range.from;
 
     try {
+      // Pull-to-refresh siempre usa Future.wait para carga paralela fresca
       final results = await Future.wait([
         _datasource.getSummary(range.from, range.to),
         _datasource.getRecentPRs(range.from, range.to),
@@ -87,6 +100,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           _trainingStyle = results[9] as TrainingStyleModel;
           _weeklyRhythm = results[10] as WeeklyRhythmModel;
           _loading = false;
+          _isUsingStaleData = false;
+          _hasLoadedOnce = true;
         });
       }
     } catch (e, st) {
@@ -98,6 +113,158 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         });
       }
     }
+  }
+
+  /// Carga datos usando cache SWR. Si ya tenemos datos, los mantiene
+  /// visibles mientras revalida en background.
+  Future<void> _loadDataWithCache() async {
+    final hadData = _hasLoadedOnce;
+
+    // Si ya tenemos datos, NO mostrar loading spinner — SWR los actualizará
+    if (hadData) {
+      setState(() {
+        _error = null;
+        _isUsingStaleData = true;
+      });
+    } else {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+
+    final range = _period.dateRange();
+    final duration = range.to.difference(range.from);
+    final prevFrom = range.from.subtract(duration);
+    final prevTo = range.from;
+
+    try {
+      // Cached methods con fallback a originales si falla el cache
+      final summary = await _cachedOrFallback(
+        () => _datasource.getSummaryCached(range.from, range.to),
+        () => _datasource.getSummary(range.from, range.to),
+      );
+      final recentPRs = await _cachedOrFallback(
+        () => _datasource.getRecentPRsCached(range.from, range.to),
+        () => _datasource.getRecentPRs(range.from, range.to),
+      );
+      final topExercises = await _cachedOrFallback(
+        () => _datasource.getTopExercisesCached(limit: 5),
+        () => _datasource.getTopExercises(limit: 5),
+      );
+      final weeklyVolume = await _cachedOrFallback(
+        () => _datasource.getWeeklyVolumeCached(range.from, range.to),
+        () => _datasource.getWeeklyVolume(range.from, range.to),
+      );
+      final previousWeeklyVolume = await _cachedOrFallback(
+        () => _datasource.getWeeklyVolumeCached(prevFrom, prevTo),
+        () => _datasource.getWeeklyVolume(prevFrom, prevTo),
+      );
+      final volumeDensity = await _cachedOrFallback(
+        () => _datasource.getVolumeDensityCached(),
+        () => _datasource.getVolumeDensity(),
+      );
+      final weeklyRhythm = await _cachedOrFallback(
+        () => _datasource.getWeeklyRhythmCached(),
+        () => _datasource.getWeeklyRhythm(),
+      );
+
+      // Métodos sin versión cached — usar originales directamente
+      final muscleDistribution = await _datasource.getMuscleDistribution(
+        range.from,
+        range.to,
+      );
+      final consistency = await _datasource.getTrainingDays(
+        range.from,
+        range.to,
+      );
+      final durationStats = await _datasource.getDurationStats(
+        range.from,
+        range.to,
+      );
+      final trainingStyle = await _datasource.getTrainingStyle(
+        range.from,
+        range.to,
+      );
+
+      if (mounted) {
+        setState(() {
+          _summary = summary;
+          _recentPRs = recentPRs;
+          _topExercises = topExercises;
+          _weeklyVolume = weeklyVolume;
+          _previousWeeklyVolume = previousWeeklyVolume;
+          _muscleDistribution = muscleDistribution;
+          _consistency = consistency;
+          _durationStats = durationStats;
+          _volumeDensity = volumeDensity;
+          _trainingStyle = trainingStyle;
+          _weeklyRhythm = weeklyRhythm;
+          _loading = false;
+          _hasLoadedOnce = true;
+        });
+
+        // Verificar staleness del cache
+        await _checkAndScheduleStaleState();
+      }
+    } catch (e, st) {
+      debugPrint('[AnalyticsScreen] Cache load error: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _error = 'Error al cargar las analíticas';
+          _loading = false;
+          _isUsingStaleData = false;
+        });
+      }
+    }
+  }
+
+  /// Intenta método cached; si falla, cae al método original.
+  Future<T> _cachedOrFallback<T>(
+    Future<T> Function() cachedFn,
+    Future<T> Function() fallbackFn,
+  ) async {
+    try {
+      return await cachedFn();
+    } catch (e) {
+      debugPrint('[AnalyticsScreen] Cached method failed, using fallback: $e');
+      return await fallbackFn();
+    }
+  }
+
+  /// Verifica si alguna clave de cache está stale y programa re-chequeo.
+  Future<void> _checkAndScheduleStaleState() async {
+    final range = _period.dateRange();
+    final fromUtc = range.from.toUtc().toIso8601String();
+    final toUtc = range.to.toUtc().toIso8601String();
+
+    final staleChecks = await Future.wait([
+      CacheManager.getStale('analytics_summary_${fromUtc}_$toUtc'),
+      CacheManager.getStale('analytics_recent_prs_${fromUtc}_$toUtc'),
+      CacheManager.getStale('analytics_top_exercises_5'),
+      CacheManager.getStale('analytics_volume_density'),
+      CacheManager.getStale('analytics_weekly_rhythm'),
+    ]);
+
+    final anyStale = staleChecks.any((entry) => entry?.isExpired == true);
+
+    if (mounted) {
+      setState(() => _isUsingStaleData = anyStale);
+    }
+
+    // Programar re-chequeo tras 5s — para limpiar indicador cuando
+    // el background refresh (disparado por _swr) complete.
+    Future.delayed(const Duration(seconds: 5), () async {
+      if (!mounted) return;
+      final recheck = await Future.wait([
+        CacheManager.getStale('analytics_summary_${fromUtc}_$toUtc'),
+        CacheManager.getStale('analytics_volume_density'),
+      ]);
+      final stillStale = recheck.any((entry) => entry?.isExpired == true);
+      if (mounted && _isUsingStaleData && !stillStale) {
+        setState(() => _isUsingStaleData = false);
+      }
+    });
   }
 
   @override
@@ -119,9 +286,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         onRefresh: _loadAllData,
         color: AppTheme.neonGreen,
         backgroundColor: AppTheme.cardBackground,
-        child: _loading 
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.neonGreen))
-          : _error != null 
+        child: _loading
+            ? const Center(
+                child: CircularProgressIndicator(color: AppTheme.neonGreen),
+              )
+            : _error != null
             ? _buildErrorView()
             : _buildDashboard(),
       ),
@@ -129,7 +298,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildDashboard() {
-    final hasWorkouts = (_summary?.sessionCount ?? 0) > 0 || _topExercises.isNotEmpty;
+    final hasWorkouts =
+        (_summary?.sessionCount ?? 0) > 0 || _topExercises.isNotEmpty;
 
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -139,6 +309,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         children: [
           const SizedBox(height: 8),
           _buildPeriodSelector(),
+          if (_isUsingStaleData) ...[
+            const SizedBox(height: 8),
+            _buildStaleDataBanner(),
+          ],
           if (!hasWorkouts) ...[
             const SizedBox(height: 24),
             _buildEmptyGlobalBanner(),
@@ -168,67 +342,95 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildPeriodSelector() => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: AnalyticsPeriod.values
-              .map((p) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(p.label),
-                      selected: _period == p,
-                      onSelected: (selected) {
-                        if (selected) {
-                          setState(() => _period = p);
-                          _loadAllData();
-                        }
-                      },
-                      selectedColor: AppTheme.neonGreen,
-                      backgroundColor: AppTheme.cardBackground,
-                      labelStyle: TextStyle(
-                        color: _period == p ? AppTheme.appBackground : AppTheme.textGrey,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      side: const BorderSide(color: ChartTheme.gridColor),
-                    ),
-                  ))
-              .toList(),
-        ),
-      );
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: AnalyticsPeriod.values
+          .map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(p.label),
+                selected: _period == p,
+                onSelected: (selected) {
+                  if (selected) {
+                    setState(() => _period = p);
+                    _loadDataWithCache();
+                  }
+                },
+                selectedColor: AppTheme.neonGreen,
+                backgroundColor: AppTheme.cardBackground,
+                labelStyle: TextStyle(
+                  color: _period == p
+                      ? AppTheme.appBackground
+                      : AppTheme.textGrey,
+                  fontWeight: FontWeight.w600,
+                ),
+                side: const BorderSide(color: ChartTheme.gridColor),
+              ),
+            ),
+          )
+          .toList(),
+    ),
+  );
 
   Widget _buildKPIRow() {
-    final volumeText = _summary != null 
-        ? _summary!.totalVolume >= 1000 
-          ? '${(_summary!.totalVolume / 1000).toStringAsFixed(1)}k'
-          : _summary!.totalVolume.toStringAsFixed(0)
+    final volumeText = _summary != null
+        ? _summary!.totalVolume >= 1000
+              ? '${(_summary!.totalVolume / 1000).toStringAsFixed(1)}k'
+              : _summary!.totalVolume.toStringAsFixed(0)
         : '0';
 
     return Row(
       children: [
-        Expanded(child: _kpiCard('Sesiones', '${_summary?.sessionCount ?? 0}', Icons.fitness_center)),
+        Expanded(
+          child: _kpiCard(
+            'Sesiones',
+            '${_summary?.sessionCount ?? 0}',
+            Icons.fitness_center,
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _kpiCard('Volumen', '$volumeText kg', Icons.line_weight)),
+        Expanded(
+          child: _kpiCard('Volumen', '$volumeText kg', Icons.line_weight),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _kpiCard('Racha actual', _buildRachaValue(), Icons.local_fire_department)),
+        Expanded(
+          child: _kpiCard(
+            'Racha actual',
+            _buildRachaValue(),
+            Icons.local_fire_department,
+          ),
+        ),
       ],
     );
   }
 
   Widget _kpiCard(String label, String value, IconData icon) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppTheme.cardBackground,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(
+      children: [
+        Icon(icon, color: AppTheme.neonGreen.withOpacity(0.8), size: 20),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
-        child: Column(
-          children: [
-            Icon(icon, color: AppTheme.neonGreen.withOpacity(0.8), size: 20),
-            const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-            const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textGrey)),
-          ],
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppTheme.textGrey),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _buildRecordsCard() => _sectionCard(
     title: 'RÉCORDS',
@@ -236,28 +438,63 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Nuevos este periodo', style: TextStyle(color: AppTheme.textGrey, fontSize: 12, fontWeight: FontWeight.bold)),
+        const Text(
+          'Nuevos este periodo',
+          style: TextStyle(
+            color: AppTheme.textGrey,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 12),
         if (_recentPRs.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text('Sin nuevos récords en este periodo', style: TextStyle(color: Colors.white54, fontSize: 13)),
+            child: Text(
+              'Sin nuevos récords en este periodo',
+              style: TextStyle(color: Colors.white54, fontSize: 13),
+            ),
           )
         else
-          ..._recentPRs.take(5).map((pr) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Text(pr.exerciseName, style: const TextStyle(color: Colors.white, fontSize: 14))),
-                Text('${pr.maxWeight.toStringAsFixed(1)} kg', style: const TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          )),
+          ..._recentPRs
+              .take(5)
+              .map(
+                (pr) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          pr.exerciseName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${pr.maxWeight.toStringAsFixed(1)} kg',
+                        style: const TextStyle(
+                          color: AppTheme.neonGreen,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
         const Divider(color: Colors.white10, height: 32),
         Row(
           children: [
-            const Text('Ranking histórico', style: TextStyle(color: AppTheme.textGrey, fontSize: 12, fontWeight: FontWeight.bold)),
+            const Text(
+              'Ranking histórico',
+              style: TextStyle(
+                color: AppTheme.textGrey,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -265,13 +502,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 color: Colors.white.withOpacity(0.07),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text('Peso máx.', style: TextStyle(color: AppTheme.textGrey, fontSize: 10, fontWeight: FontWeight.w600)),
+              child: const Text(
+                'Peso máx.',
+                style: TextStyle(
+                  color: AppTheme.textGrey,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 12),
         if (_topExercises.isEmpty)
-          const Text('Sin datos registrados aún', style: TextStyle(color: Colors.white54, fontSize: 13))
+          const Text(
+            'Sin datos registrados aún',
+            style: TextStyle(color: Colors.white54, fontSize: 13),
+          )
         else
           ..._topExercises.map((top) {
             Color rankColor = Colors.white54;
@@ -286,13 +533,34 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   Container(
                     width: 24,
                     height: 24,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: rankColor.withOpacity(0.2)),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: rankColor.withOpacity(0.2),
+                    ),
                     alignment: Alignment.center,
-                    child: Text('${top.rank}', style: TextStyle(color: rankColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                    child: Text(
+                      '${top.rank}',
+                      style: TextStyle(
+                        color: rankColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(top.exerciseName, style: const TextStyle(color: Colors.white, fontSize: 14))),
-                  Text('${top.best1Rm.toStringAsFixed(1)} kg', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                  Expanded(
+                    child: Text(
+                      top.exerciseName,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+                  Text(
+                    '${top.best1Rm.toStringAsFixed(1)} kg',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -302,9 +570,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   );
 
   Widget _buildWeeklyVolumeCard() {
-    final currentTotal = _weeklyVolume.fold<double>(0, (sum, w) => sum + w.totalVolume);
-    final prevTotal = _previousWeeklyVolume.fold<double>(0, (sum, w) => sum + w.totalVolume);
-    
+    final currentTotal = _weeklyVolume.fold<double>(
+      0,
+      (sum, w) => sum + w.totalVolume,
+    );
+    final prevTotal = _previousWeeklyVolume.fold<double>(
+      0,
+      (sum, w) => sum + w.totalVolume,
+    );
+
     double percentDiff = 0;
     if (prevTotal > 0) {
       percentDiff = ((currentTotal - prevTotal) / prevTotal) * 100;
@@ -320,15 +594,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             height: 180,
             child: AppBarChart(
               values: _weeklyVolume.map((w) => w.totalVolume).toList(),
-              labels: _weeklyVolume.map((w) => 'S${_weekNumber(w.weekStart)}').toList(),
-              yFormatter: (val) => val >= 1000 ? '${(val/1000).toStringAsFixed(1)}k' : val.toStringAsFixed(0),
+              labels: _weeklyVolume
+                  .map((w) => 'S${_weekNumber(w.weekStart)}')
+                  .toList(),
+              yFormatter: (val) => val >= 1000
+                  ? '${(val / 1000).toStringAsFixed(1)}k'
+                  : val.toStringAsFixed(0),
               labelInterval: _barLabelInterval(_weeklyVolume.length),
             ),
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              _miniStat('Este periodo', '${currentTotal.toStringAsFixed(0)} kg'),
+              _miniStat(
+                'Este periodo',
+                '${currentTotal.toStringAsFixed(0)} kg',
+              ),
               const SizedBox(width: 16),
               _miniStat('Periodo ant.', '${prevTotal.toStringAsFixed(0)} kg'),
             ],
@@ -341,35 +622,55 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildMuscleDistributionCard() => _sectionCard(
     title: 'DISTRIBUCIÓN MUSCULAR',
     icon: Icons.pie_chart_outline,
-    child: _muscleDistribution.isEmpty 
-      ? const Text('Sin entrenamientos en este periodo', style: TextStyle(color: Colors.white54))
-      : Column(
-          children: _muscleDistribution.map((m) => Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(m.muscleGroup, style: const TextStyle(color: Colors.white, fontSize: 13)),
-                    Text('${m.percentage.toStringAsFixed(1)}%', style: const TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 13)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: m.percentage / 100,
-                    backgroundColor: Colors.white10,
-                    color: AppTheme.neonGreen,
-                    minHeight: 6,
+    child: _muscleDistribution.isEmpty
+        ? const Text(
+            'Sin entrenamientos en este periodo',
+            style: TextStyle(color: Colors.white54),
+          )
+        : Column(
+            children: _muscleDistribution
+                .map(
+                  (m) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              m.muscleGroup,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              '${m.percentage.toStringAsFixed(1)}%',
+                              style: const TextStyle(
+                                color: AppTheme.neonGreen,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: m.percentage / 100,
+                            backgroundColor: Colors.white10,
+                            color: AppTheme.neonGreen,
+                            minHeight: 6,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          )).toList(),
-        ),
+                )
+                .toList(),
+          ),
   );
 
   Widget _buildConsistencyCard() => _sectionCard(
@@ -380,9 +681,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _miniStat('Racha actual', '${_consistency?.currentStreak ?? 0} ${(_consistency?.currentStreak ?? 0) == 1 ? 'día' : 'días'}'),
-            _miniStat('Mejor racha', '${_consistency?.bestStreak ?? 0} ${(_consistency?.bestStreak ?? 0) == 1 ? 'día' : 'días'}'),
-            _miniStat('Media/sem', '${_consistency?.avgDaysPerWeek.toStringAsFixed(1) ?? '0'} d'),
+            _miniStat(
+              'Racha actual',
+              '${_consistency?.currentStreak ?? 0} ${(_consistency?.currentStreak ?? 0) == 1 ? 'día' : 'días'}',
+            ),
+            _miniStat(
+              'Mejor racha',
+              '${_consistency?.bestStreak ?? 0} ${(_consistency?.bestStreak ?? 0) == 1 ? 'día' : 'días'}',
+            ),
+            _miniStat(
+              'Media/sem',
+              '${_consistency?.avgDaysPerWeek.toStringAsFixed(1) ?? '0'} d',
+            ),
           ],
         ),
         const SizedBox(height: 20),
@@ -393,9 +703,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   Widget _buildCalendarConsistency() {
     final now = DateTime.now();
-    final trainingDaysSet = _consistency?.trainingDays
-        .map((d) => DateTime(d.year, d.month, d.day))
-        .toSet() ?? {};
+    final trainingDaysSet =
+        _consistency?.trainingDays
+            .map((d) => DateTime(d.year, d.month, d.day))
+            .toSet() ??
+        {};
 
     int maxMonths;
     switch (_period) {
@@ -437,7 +749,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
     final firstWeekday = DateTime(month.year, month.month, 1).weekday; // 1=Mon
     const dayHeaders = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
 
     final cells = <Widget>[];
     for (int i = 1; i < firstWeekday; i++) {
@@ -445,7 +761,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
     for (int day = 1; day <= daysInMonth; day++) {
       final date = DateTime(month.year, month.month, day);
-      cells.add(_dayCellCalendar(day, trainingDays.contains(date), date == today));
+      cells.add(
+        _dayCellCalendar(day, trainingDays.contains(date), date == today),
+      );
     }
 
     return Column(
@@ -453,16 +771,27 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       children: [
         Text(
           monthName[0].toUpperCase() + monthName.substring(1),
-          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 6),
         Row(
           children: dayHeaders
-              .map((d) => Expanded(
-                    child: Text(d,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppTheme.textGrey, fontSize: 10)),
-                  ))
+              .map(
+                (d) => Expanded(
+                  child: Text(
+                    d,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppTheme.textGrey,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              )
               .toList(),
         ),
         const SizedBox(height: 4),
@@ -480,35 +809,45 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _dayCellCalendar(int day, bool isTrained, bool isToday) => Container(
-        decoration: BoxDecoration(
-          color: isTrained
-              ? AppTheme.neonGreen.withOpacity(0.85)
-              : isToday
-                  ? Colors.white.withOpacity(0.12)
-                  : Colors.white.withOpacity(0.04),
-          borderRadius: BorderRadius.circular(4),
-          border: isToday && !isTrained
-              ? Border.all(color: AppTheme.neonGreen.withOpacity(0.5), width: 1)
-              : null,
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          '$day',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: isTrained ? FontWeight.bold : FontWeight.normal,
-            color: isTrained ? Colors.black : Colors.white54,
-          ),
-        ),
-      );
+    decoration: BoxDecoration(
+      color: isTrained
+          ? AppTheme.neonGreen.withOpacity(0.85)
+          : isToday
+          ? Colors.white.withOpacity(0.12)
+          : Colors.white.withOpacity(0.04),
+      borderRadius: BorderRadius.circular(4),
+      border: isToday && !isTrained
+          ? Border.all(color: AppTheme.neonGreen.withOpacity(0.5), width: 1)
+          : null,
+    ),
+    alignment: Alignment.center,
+    child: Text(
+      '$day',
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: isTrained ? FontWeight.bold : FontWeight.normal,
+        color: isTrained ? Colors.black : Colors.white54,
+      ),
+    ),
+  );
 
   Widget _buildDurationCard() => _sectionCard(
     title: 'DURACIÓN',
     icon: Icons.timer_outlined,
     child: Row(
       children: [
-        Expanded(child: _miniStat('Media por sesión', '${_durationStats?.avgMinutes ?? 0} min')),
-        Expanded(child: _miniStat('Sesión más larga', '${_durationStats?.longestMinutes ?? 0} min')),
+        Expanded(
+          child: _miniStat(
+            'Media por sesión',
+            '${_durationStats?.avgMinutes ?? 0} min',
+          ),
+        ),
+        Expanded(
+          child: _miniStat(
+            'Sesión más larga',
+            '${_durationStats?.longestMinutes ?? 0} min',
+          ),
+        ),
       ],
     ),
   );
@@ -516,84 +855,147 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   // ── EZE-168 section cards ────────────────────────────────────────────────
 
   Widget _buildVolumeDensityCard() => _sectionCard(
-        title: 'DENSIDAD DE VOLUMEN',
-        icon: Icons.compress_rounded,
-        child: _volumeDensity == null
-            ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
-            : VolumeDensityChart(data: _volumeDensity!),
-      );
+    title: 'DENSIDAD DE VOLUMEN',
+    icon: Icons.compress_rounded,
+    child: _volumeDensity == null
+        ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
+        : VolumeDensityChart(data: _volumeDensity!),
+  );
 
   Widget _buildTrainingStyleCard() => _sectionCard(
-        title: 'ESTILO DE ENTRENAMIENTO',
-        icon: Icons.pie_chart_outline_rounded,
-        child: _trainingStyle == null
-            ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
-            : TrainingStyleChart(data: _trainingStyle!),
-      );
+    title: 'ESTILO DE ENTRENAMIENTO',
+    icon: Icons.pie_chart_outline_rounded,
+    child: _trainingStyle == null
+        ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
+        : TrainingStyleChart(data: _trainingStyle!),
+  );
 
   Widget _buildWeeklyRhythmCard() => _sectionCard(
-        title: 'RITMO SEMANAL',
-        icon: Icons.radar_rounded,
-        child: _weeklyRhythm == null
-            ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
-            : WeeklyRhythmChart(data: _weeklyRhythm!),
-      );
+    title: 'RITMO SEMANAL',
+    icon: Icons.radar_rounded,
+    child: _weeklyRhythm == null
+        ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
+        : WeeklyRhythmChart(data: _weeklyRhythm!),
+  );
 
   // ── UI Helpers ──────────────────────────────────────────────────────────
 
-  Widget _sectionCard({required String title, required IconData icon, required Widget child, Widget? badge}) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _sectionCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    Widget? badge,
+  }) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppTheme.cardBackground,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Icon(icon, size: 16, color: AppTheme.textGrey),
-                const SizedBox(width: 6),
-                Text(title, style: const TextStyle(color: AppTheme.textGrey, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-                const Spacer(),
-                if (badge != null) badge,
-              ],
+            Icon(icon, size: 16, color: AppTheme.textGrey),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppTheme.textGrey,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+              ),
             ),
-            const SizedBox(height: 14),
-            child,
+            const Spacer(),
+            if (badge != null) badge,
           ],
         ),
-      );
+        const SizedBox(height: 14),
+        child,
+      ],
+    ),
+  );
 
   Widget _comparisonBadge(double percent) {
     final isPositive = percent >= 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: (isPositive ? AppTheme.neonGreen : Colors.redAccent).withOpacity(0.15),
+        color: (isPositive ? AppTheme.neonGreen : Colors.redAccent).withOpacity(
+          0.15,
+        ),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         '${isPositive ? '+' : ''}${percent.toStringAsFixed(0)}% vs ant.',
-        style: TextStyle(color: isPositive ? AppTheme.neonGreen : Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          color: isPositive ? AppTheme.neonGreen : Colors.redAccent,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
 
   Widget _miniStat(String label, String value) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(color: AppTheme.textGrey, fontSize: 11)),
-          const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(color: AppTheme.textGrey, fontSize: 11),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        value,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    ],
+  );
+
+  Widget _buildStaleDataBanner() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: Colors.orangeAccent.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.orangeAccent.withOpacity(0.2)),
+    ),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: Colors.orangeAccent.withOpacity(0.7),
+          ),
+        ),
+        const SizedBox(width: 10),
+        const Expanded(
+          child: Text(
+            'Actualizando datos…',
+            style: TextStyle(
+              color: Colors.orangeAccent,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _buildEmptyGlobalBanner() => Container(
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      gradient: LinearGradient(colors: [AppTheme.neonGreen.withOpacity(0.2), Colors.transparent]),
+      gradient: LinearGradient(
+        colors: [AppTheme.neonGreen.withOpacity(0.2), Colors.transparent],
+      ),
       borderRadius: BorderRadius.circular(16),
       border: Border.all(color: AppTheme.neonGreen.withOpacity(0.3)),
     ),
@@ -622,7 +1024,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ElevatedButton(
           onPressed: _loadAllData,
           style: ElevatedButton.styleFrom(backgroundColor: AppTheme.neonGreen),
-          child: const Text('Reintentar', style: TextStyle(color: AppTheme.appBackground)),
+          child: const Text(
+            'Reintentar',
+            style: TextStyle(color: AppTheme.appBackground),
+          ),
         ),
       ],
     ),
