@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:gym_analytics_mobile/features/workouts/presentation/screens/workout_detail_screen.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../data/models/workout_models.dart';
+import '../screens/workout_detail_screen.dart';
 
 class WorkoutCard extends StatelessWidget {
-  final dynamic workout;
+  final WorkoutModel workout;
   final VoidCallback? onDeleted;
 
   const WorkoutCard({super.key, required this.workout, this.onDeleted});
@@ -12,7 +13,7 @@ class WorkoutCard extends StatelessWidget {
   String _formatDate(String isoString) {
     try {
       final date = DateTime.parse(isoString);
-      return DateFormat('MMM d, yyyy').format(date); // Ej: Oct 24, 2023
+      return DateFormat('MMM d, yyyy').format(date);
     } catch (e) {
       return '';
     }
@@ -20,22 +21,21 @@ class WorkoutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalVolume = workout['totalVolume'] != null
-        ? '${double.parse(workout['totalVolume'].toString()).toStringAsFixed(0)} kg'
+    final name = workout.name ?? 'Entrenamiento';
+    final totalVolume = workout.totalVolume != null
+        ? '${workout.totalVolume!.toStringAsFixed(0)} kg'
         : '0 kg';
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(
-          12,
-        ), // Ajusta al radio de tu tarjeta
+        borderRadius: BorderRadius.circular(12),
         onTap: () async {
           final deleted = await Navigator.push<bool>(
             context,
             MaterialPageRoute(
               builder: (context) =>
-                  WorkoutDetailScreen(workoutId: workout['id']),
+                  WorkoutDetailScreen(workoutId: workout.id),
             ),
           );
           if (deleted == true) onDeleted?.call();
@@ -45,7 +45,6 @@ class WorkoutCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(16),
-            // Línea verde a la izquierda como en el mockup
             border: const Border(
               left: BorderSide(color: AppTheme.neonGreen, width: 4),
             ),
@@ -54,7 +53,6 @@ class WorkoutCard extends StatelessWidget {
             padding: const EdgeInsets.all(16.0),
             child: Row(
               children: [
-                // Icono cuadrado redondeado
                 Container(
                   width: 50,
                   height: 50,
@@ -68,14 +66,12 @@ class WorkoutCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-
-                // Info Central
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        workout['name'] ?? 'Entrenamiento',
+                        name,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -92,7 +88,7 @@ class WorkoutCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            _formatDate(workout['startTime'] ?? ''),
+                            _formatDate(workout.startTime.toIso8601String()),
                             style: const TextStyle(
                               color: AppTheme.textGrey,
                               fontSize: 13,
@@ -117,8 +113,6 @@ class WorkoutCard extends StatelessWidget {
                     ],
                   ),
                 ),
-
-                // Icono flecha derecha
                 const Icon(Icons.chevron_right, color: AppTheme.textGrey),
               ],
             ),

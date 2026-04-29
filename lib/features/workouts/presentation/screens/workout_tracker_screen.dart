@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../core/network/api_client.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../features/analytics/data/models/analytics_models.dart';
 import '../../data/models/routine_models.dart';
+import '../providers/workout_tracker_provider.dart';
 
 // ── Domain models ────────────────────────────────────────────────────────────
 
@@ -57,9 +58,6 @@ class _WorkoutTrackerScreenState extends State<WorkoutTrackerScreen> {
   late final List<_ActiveExercise> _activeExercises;
   late final DateTime _startTime;
 
-  int _currentIndex = 0;
-  Timer? _timer;
-  int _elapsed = 0;
   bool _saving = false;
 
   @override
@@ -70,48 +68,21 @@ class _WorkoutTrackerScreenState extends State<WorkoutTrackerScreen> {
       final ts = widget.startData.targetSeries[ex.id] ?? 1;
       return _ActiveExercise(ex, targetSeries: ts);
     }).toList();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      setState(() => _elapsed++);
+
+    // Iniciar tracker en provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<WorkoutTrackerProvider>().startWorkout(widget.startData);
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     for (final ae in _activeExercises) {
       for (final s in ae.sets) {
         s.dispose();
       }
     }
     super.dispose();
-  }
-
-  String get _timerText {
-    final h = _elapsed ~/ 3600;
-    final m = (_elapsed % 3600) ~/ 60;
-    final s = _elapsed % 60;
-    if (h > 0) {
-      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    }
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
-  String get _appBarTitle {
-    final total = _activeExercises.length;
-    final routineName =
-        widget.startData.routineName?.toUpperCase() ?? 'WORKOUT';
-    if (total == 0) return routineName;
-    return '$routineName  •  ${_currentIndex + 1} OF $total';
-  }
-
-  void _goToPrev() {
-    if (_currentIndex > 0) setState(() => _currentIndex--);
-  }
-
-  void _goToNext() {
-    if (_currentIndex < _activeExercises.length - 1) {
-      setState(() => _currentIndex++);
-    }
   }
 
   void _addSet() {
@@ -164,35 +135,19 @@ class _WorkoutTrackerScreenState extends State<WorkoutTrackerScreen> {
       });
     }
 
-    final payload = {
-      'name': autoName,
-      'startTime': _startTime.toUtc().toIso8601String(),
-      'endTime': endTime.toUtc().toIso8601String(),
-      'exercises': exercises,
-    };
-
     setState(() => _saving = true);
     try {
-      final response = await ApiClient.post('/api/workouts', body: payload);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        if (mounted) {
-          Navigator.of(context).pop(true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('¡Entrenamiento guardado!'),
-              backgroundColor: AppTheme.neonGreen,
-            ),
-          );
-        }
-      } else {
-        throw Exception('HTTP ${response.statusCode}');
-      }
-    } catch (e) {
-      if (mounted) {
+      final success = await context.read<WorkoutTrackerProvider>().finishWorkout(
+        startTime: _startTime,
+        endTime: endTime,
+        exercisesPayload: exercises,
+      );
+      if (success && mounted) {
+        Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red,
+          const SnackBar(
+            content: Text('¡Entrenamiento guardado!'),
+            backgroundColor: AppTheme.neonGreen,
           ),
         );
       }
@@ -232,14 +187,52 @@ class _WorkoutTrackerScreenState extends State<WorkoutTrackerScreen> {
         ],
       ),
     ).then((confirmed) {
-      if (confirmed == true && mounted) Navigator.of(context).pop(false);
+      if (confirmed == true && mounted) {
+        context.read<WorkoutTrackerProvider>().cancelWorkout();
+        Navigator.of(context).pop(false);
+      }
     });
+  }
+
+  int get _currentIndex => context.read<WorkoutTrackerProvider>().currentIndex;
+
+  void _goToPrev() {
+    context.read<WorkoutTrackerProvider>().goToPrevExercise();
+  }
+
+  void _goToNext() {
+    context.read<WorkoutTrackerProvider>().goToNextExercise();
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<WorkoutTrackerProvider>();
     final hasExercises = _activeExercises.isNotEmpty;
-    final current = hasExercises ? _activeExercises[_currentIndex] : null;
+    final currentIdx = provider.currentIndex;
+    final current = hasExercises && currentIdx < _activeExercises.length
+        ? _activeExercises[currentIdx]
+        : null;
+    final elapsed = provider.elapsedSeconds;
+
+    String timerText;
+    final h = elapsed ~/ 3600;
+    final m = (elapsed % 3600) ~/ 60;
+    final s2 = elapsed % 60;
+    if (h > 0) {
+      timerText = '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s2.toString().padLeft(2, '0')}';
+    } else {
+      timerText = '${m.toString().padLeft(2, '0')}:${s2.toString().padLeft(2, '0')}';
+    }
+
+    String appBarTitle;
+    final total = _activeExercises.length;
+    final routineName =
+        widget.startData.routineName?.toUpperCase() ?? 'WORKOUT';
+    if (total == 0) {
+      appBarTitle = routineName;
+    } else {
+      appBarTitle = '$routineName  •  ${currentIdx + 1} OF $total';
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.appBackground,
@@ -250,7 +243,7 @@ class _WorkoutTrackerScreenState extends State<WorkoutTrackerScreen> {
           onPressed: _confirmCancel,
         ),
         title: Text(
-          _appBarTitle,
+          appBarTitle,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 14,
@@ -284,7 +277,7 @@ class _WorkoutTrackerScreenState extends State<WorkoutTrackerScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 20, bottom: 4),
             child: Text(
-              _timerText,
+              timerText,
               style: const TextStyle(
                 color: AppTheme.neonGreen,
                 fontSize: 52,
@@ -346,26 +339,26 @@ class _WorkoutTrackerScreenState extends State<WorkoutTrackerScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    onPressed: _currentIndex > 0 ? _goToPrev : null,
+                    onPressed: currentIdx > 0 ? _goToPrev : null,
                     icon: Icon(
                       Icons.arrow_back_ios,
-                      color: _currentIndex > 0
+                      color: currentIdx > 0
                           ? Colors.white
                           : Colors.grey.withAlpha(60),
                       size: 20,
                     ),
                   ),
                   Text(
-                    '${_currentIndex + 1} / ${_activeExercises.length}',
+                    '${currentIdx + 1} / ${_activeExercises.length}',
                     style: const TextStyle(color: Colors.grey, fontSize: 13),
                   ),
                   IconButton(
-                    onPressed: _currentIndex < _activeExercises.length - 1
+                    onPressed: currentIdx < _activeExercises.length - 1
                         ? _goToNext
                         : null,
                     icon: Icon(
                       Icons.arrow_forward_ios,
-                      color: _currentIndex < _activeExercises.length - 1
+                      color: currentIdx < _activeExercises.length - 1
                           ? Colors.white
                           : Colors.grey.withAlpha(60),
                       size: 20,
@@ -756,7 +749,7 @@ class _SetRow extends StatelessWidget {
             ),
           ),
 
-          // PREV (previous session — placeholder)
+          // PREV (placeholder)
           const Expanded(
             child: Text(
               '—',

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../data/datasources/routine_datasource.dart';
 import '../../data/models/routine_models.dart';
-import '../../../../features/analytics/data/datasources/analytics_datasource.dart';
+import '../providers/routine_provider.dart';
 import '../../../../features/analytics/data/models/analytics_models.dart';
+import '../../../analytics/presentation/providers/analytics_provider.dart';
 
 class RoutineDetailScreen extends StatefulWidget {
   final RoutineModel routine;
@@ -107,7 +108,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         };
       }).toList();
 
-      await RoutineDatasource().updateRoutine(
+      final result = await context.read<RoutineProvider>().updateRoutine(
         id: widget.routine.id,
         name: _nameCtrl.text.trim(),
         description: _descCtrl.text.trim().isEmpty
@@ -116,12 +117,12 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         exercises: exercisesPayload,
       );
 
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (e) {
-      if (mounted) {
+      if (result != null && mounted) {
+        Navigator.of(context).pop(true);
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al guardar: $e'),
+            content: Text('Error: ${context.read<RoutineProvider>().error}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -446,7 +447,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
 
   Future<void> _load() async {
     try {
-      final exercises = await AnalyticsDatasource().getExercises();
+      final exercises = await context.read<AnalyticsProvider>().getExercises();
       final groups =
           exercises
               .where((e) => e.muscleGroup != null)

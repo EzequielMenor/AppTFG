@@ -1,9 +1,10 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../features/analytics/data/datasources/analytics_datasource.dart';
 import '../../../../features/analytics/data/models/analytics_models.dart';
-import '../../data/datasources/routine_datasource.dart';
+import '../../../analytics/presentation/providers/analytics_provider.dart';
+import '../providers/routine_provider.dart';
 
 // ── CSV parsing ───────────────────────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
       final routines = extractRoutinesFromCsv(widget.csvContent);
 
       // Load all DB exercises for matching
-      final dbExercises = await AnalyticsDatasource().getExercises();
+      final dbExercises = await context.read<AnalyticsProvider>().getExercises();
 
       for (final routine in routines) {
         for (final ex in routine.exercises) {
@@ -188,7 +189,7 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
       }
 
       try {
-        await RoutineDatasource().createRoutine(
+        final result = await context.read<RoutineProvider>().createRoutine(
           name: routine.name,
           exercises: matchedExercises.asMap().entries.map((entry) {
             return {
@@ -202,7 +203,11 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
             };
           }).toList(),
         );
-        saved++;
+        if (result != null) {
+          saved++;
+        } else {
+          errors.add('${routine.name}: error al crear');
+        }
       } catch (e) {
         errors.add('${routine.name}: $e');
       }

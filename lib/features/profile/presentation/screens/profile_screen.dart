@@ -1,12 +1,9 @@
-import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../core/cache/cache_manager.dart';
-import '../../../../core/network/api_client.dart';
-import '../../../../core/settings/settings_manager.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../providers/profile_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -16,33 +13,17 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  bool _isImporting = false;
-  bool _isClearing = false;
-  String? _statusMessage;
-  bool? _isSuccess;
-
-  String? _displayName;
-  String _weightUnit = 'kg';
-
   @override
   void initState() {
     super.initState();
-    _loadPreferences();
-  }
-
-  Future<void> _loadPreferences() async {
-    final name = await SettingsManager.getDisplayName();
-    final unit = await SettingsManager.getWeightUnit();
-    if (mounted) {
-      setState(() {
-        _displayName = name;
-        _weightUnit = unit;
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProfileProvider>().loadProfile();
+    });
   }
 
   Future<void> _editDisplayName() async {
-    final controller = TextEditingController(text: _displayName ?? '');
+    final profile = context.read<ProfileProvider>();
+    final controller = TextEditingController(text: profile.displayName ?? '');
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -88,14 +69,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (result != null && result.isNotEmpty) {
-      await SettingsManager.setDisplayName(result);
-      setState(() => _displayName = result);
+      await context.read<ProfileProvider>().updateDisplayName(result);
     }
   }
 
   Future<void> _toggleWeightUnit(String unit) async {
-    await SettingsManager.setWeightUnit(unit);
-    setState(() => _weightUnit = unit);
+    await context.read<ProfileProvider>().setWeightUnit(unit);
   }
 
   Future<void> _importHevy() async {
@@ -105,49 +84,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (result == null || result.files.single.path == null) return;
 
-    setState(() {
-      _isImporting = true;
-      _statusMessage = null;
-      _isSuccess = null;
-    });
-
-    try {
-      final response = await ApiClient.postMultipart(
-        '/api/import/hevy',
-        filePath: result.files.single.path!,
-        fieldName: 'file',
-      );
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final body = json.decode(response.body);
-        final int success = body['successCount'] ?? 0;
-        final int failed = body['failedCount'] ?? 0;
-        final List<dynamic> failedRowsRaw = body['failedRows'] ?? [];
-        final int failedRowsCount = failedRowsRaw.length;
-        final String failedPreview = failedRowsRaw
-            .take(3)
-            .map((e) => e.toString())
-            .join('\n');
-        setState(() {
-          _isSuccess = success > 0;
-          _statusMessage = success > 0
-              ? 'Importadas $success series correctamente. Fallos: $failed (detalles: $failedRowsCount)'
-                    '${failedPreview.isNotEmpty ? '\n\nPrimeros fallos:\n$failedPreview' : ''}'
-              : 'Nada importado. $failed filas fallaron.';
-        });
-      } else {
-        setState(() {
-          _isSuccess = false;
-          _statusMessage = 'Error del servidor (${response.statusCode}).';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _isSuccess = false;
-        _statusMessage = 'Error: $e';
-      });
-    } finally {
-      setState(() => _isImporting = false);
-    }
+    await context.read<ProfileProvider>().importCsv(result.files.single.path!);
   }
 
   Future<void> _clearAllData() async {
@@ -184,41 +121,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (confirmed != true) return;
 
-    setState(() {
-      _isClearing = true;
-      _statusMessage = null;
-      _isSuccess = null;
-    });
-
-    try {
-      final response = await ApiClient.delete('/api/workouts');
-      if (response.statusCode == 200) {
-        await CacheManager.clearAllCache();
-        setState(() {
-          _isSuccess = true;
-          _statusMessage = 'Todos los entrenamientos han sido borrados.';
-        });
-      } else {
-        setState(() {
-          _isSuccess = false;
-          _statusMessage = 'Error del servidor (${response.statusCode}).';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _isSuccess = false;
-        _statusMessage = 'Error: $e';
-      });
-    } finally {
-      setState(() => _isClearing = false);
-    }
+    await context.read<ProfileProvider>().clearData();
   }
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileProvider>();
     final user = context.watch<AuthProvider>().user;
     final email = user?.email ?? '';
-    final displayName = _displayName?.isNotEmpty == true ? _displayName! : null;
+    final displayName = profile.displayName?.isNotEmpty == true ? profile.displayName! : null;
     final initial = (displayName ?? email).isNotEmpty
         ? (displayName ?? email)[0].toUpperCase()
         : '?';
@@ -301,7 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
 
           // --- Unidades de peso ---
-          _UnitToggleTile(selected: _weightUnit, onSelect: _toggleWeightUnit),
+          _UnitToggleTile(selected: profile.weightUnit, onSelect: _toggleWeightUnit),
 
           const SizedBox(height: 36),
           const _SectionHeader(title: 'Datos'),
@@ -311,8 +222,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.upload_file,
             title: 'Importar desde Hevy',
             subtitle: 'Sube tu historial en formato CSV',
-            onTap: _isImporting ? null : _importHevy,
-            trailing: _isImporting ? const _LoadingIndicator() : null,
+            onTap: profile.isImporting ? null : _importHevy,
+            trailing: profile.isImporting ? const _LoadingIndicator() : null,
           ),
 
           const SizedBox(height: 8),
@@ -322,31 +233,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.delete_sweep_outlined,
             title: 'Limpiar todos los datos',
             subtitle: 'Borra todos los entrenamientos y la caché',
-            onTap: _isClearing ? null : _clearAllData,
+            onTap: profile.isClearing ? null : _clearAllData,
             iconColor: Colors.redAccent,
             titleColor: Colors.redAccent,
-            trailing: _isClearing ? const _LoadingIndicator() : null,
+            trailing: profile.isClearing ? const _LoadingIndicator() : null,
           ),
 
           // --- Feedback de estado ---
-          if (_statusMessage != null)
+          if (profile.statusMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
               child: Row(
                 children: [
                   Icon(
-                    _isSuccess == true ? Icons.check_circle : Icons.error,
+                    profile.isSuccess == true ? Icons.check_circle : Icons.error,
                     size: 16,
-                    color: _isSuccess == true
+                    color: profile.isSuccess == true
                         ? AppTheme.neonGreen
                         : Colors.redAccent,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _statusMessage!,
+                      profile.statusMessage!,
                       style: TextStyle(
-                        color: _isSuccess == true
+                        color: profile.isSuccess == true
                             ? AppTheme.neonGreen
                             : Colors.redAccent,
                         fontSize: 13,

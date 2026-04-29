@@ -4,6 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'app.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/analytics/presentation/providers/analytics_provider.dart';
+import 'features/workouts/presentation/providers/workout_provider.dart';
+import 'features/workouts/presentation/providers/workout_tracker_provider.dart';
+import 'features/workouts/presentation/providers/routine_provider.dart';
+import 'features/profile/presentation/providers/profile_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +25,14 @@ Future<void> main() async {
   runApp(
     // Inyectamos el AuthProvider en la raíz de la app
     MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AuthProvider())],
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
+        ChangeNotifierProvider(create: (_) => WorkoutProvider()),
+        ChangeNotifierProvider(create: (_) => WorkoutTrackerProvider()),
+        ChangeNotifierProvider(create: (_) => RoutineProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
+      ],
       child: const GymAnalyticsApp(),
     ),
   );

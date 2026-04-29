@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import '../../../../core/cache/cache_manager.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/chart_theme.dart';
 import '../../../../shared/widgets/charts/app_bar_chart.dart';
-import '../../data/datasources/analytics_datasource.dart';
 import '../../data/models/analytics_models.dart';
 import '../../domain/analytics_period.dart';
+import '../providers/analytics_provider.dart';
 import '../widgets/volume_density_chart.dart';
 import '../widgets/training_style_chart.dart';
 import '../widgets/weekly_rhythm_chart.dart';
@@ -21,254 +21,19 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  final _datasource = AnalyticsDatasource();
-  AnalyticsPeriod _period = AnalyticsPeriod.oneMonth;
-
-  bool _loading = true;
-  String? _error;
-
-  /// True cuando los datos mostrados provienen de cache stale (background revalidating).
-  bool _isUsingStaleData = false;
-
-  /// True después del primer load exitoso — permite SWR en cambios de período.
-  bool _hasLoadedOnce = false;
-
-  AnalyticsSummaryModel? _summary;
-  List<RecentPrModel> _recentPRs = [];
-  List<TopExerciseModel> _topExercises = [];
-  List<WeeklyVolumeModel> _weeklyVolume = [];
-  List<WeeklyVolumeModel> _previousWeeklyVolume = [];
-  List<MuscleDistributionModel> _muscleDistribution = [];
-  ConsistencyModel? _consistency;
-  DurationStatsModel? _durationStats;
-  // EZE-168
-  VolumeDensityModel? _volumeDensity;
-  TrainingStyleModel? _trainingStyle;
-  WeeklyRhythmModel? _weeklyRhythm;
-
   @override
   void initState() {
     super.initState();
-    _loadAllData();
-  }
-
-  // ── Data loading with SWR cache ──────────────────────────────────────
-
-  /// Pull-to-refresh: limpia cache y carga fresco desde API.
-  Future<void> _loadAllData() async {
-    // Limpiar todo el cache de analytics para forzar fetch fresco
-    await CacheManager.clearAllCache();
-
-    setState(() {
-      _loading = true;
-      _error = null;
-      _isUsingStaleData = false;
-    });
-
-    final range = _period.dateRange();
-    final duration = range.to.difference(range.from);
-    final prevFrom = range.from.subtract(duration);
-    final prevTo = range.from;
-
-    try {
-      // Pull-to-refresh siempre usa Future.wait para carga paralela fresca
-      final results = await Future.wait([
-        _datasource.getSummary(range.from, range.to),
-        _datasource.getRecentPRs(range.from, range.to),
-        _datasource.getTopExercises(limit: 5),
-        _datasource.getWeeklyVolume(range.from, range.to),
-        _datasource.getWeeklyVolume(prevFrom, prevTo),
-        _datasource.getMuscleDistribution(range.from, range.to),
-        _datasource.getTrainingDays(range.from, range.to),
-        _datasource.getDurationStats(range.from, range.to),
-        _datasource.getVolumeDensity(),
-        _datasource.getTrainingStyle(range.from, range.to),
-        _datasource.getWeeklyRhythm(),
-      ]);
-
-      if (mounted) {
-        setState(() {
-          _summary = results[0] as AnalyticsSummaryModel;
-          _recentPRs = results[1] as List<RecentPrModel>;
-          _topExercises = results[2] as List<TopExerciseModel>;
-          _weeklyVolume = results[3] as List<WeeklyVolumeModel>;
-          _previousWeeklyVolume = results[4] as List<WeeklyVolumeModel>;
-          _muscleDistribution = results[5] as List<MuscleDistributionModel>;
-          _consistency = results[6] as ConsistencyModel;
-          _durationStats = results[7] as DurationStatsModel;
-          _volumeDensity = results[8] as VolumeDensityModel;
-          _trainingStyle = results[9] as TrainingStyleModel;
-          _weeklyRhythm = results[10] as WeeklyRhythmModel;
-          _loading = false;
-          _isUsingStaleData = false;
-          _hasLoadedOnce = true;
-        });
-      }
-    } catch (e, st) {
-      debugPrint('[AnalyticsScreen] Error: $e\n$st');
-      if (mounted) {
-        setState(() {
-          _error = 'Error al cargar las analíticas';
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  /// Carga datos usando cache SWR. Si ya tenemos datos, los mantiene
-  /// visibles mientras revalida en background.
-  Future<void> _loadDataWithCache() async {
-    final hadData = _hasLoadedOnce;
-
-    // Si ya tenemos datos, NO mostrar loading spinner — SWR los actualizará
-    if (hadData) {
-      setState(() {
-        _error = null;
-        _isUsingStaleData = true;
-      });
-    } else {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
-
-    final range = _period.dateRange();
-    final duration = range.to.difference(range.from);
-    final prevFrom = range.from.subtract(duration);
-    final prevTo = range.from;
-
-    try {
-      // Cached methods con fallback a originales si falla el cache
-      final summary = await _cachedOrFallback(
-        () => _datasource.getSummaryCached(range.from, range.to),
-        () => _datasource.getSummary(range.from, range.to),
-      );
-      final recentPRs = await _cachedOrFallback(
-        () => _datasource.getRecentPRsCached(range.from, range.to),
-        () => _datasource.getRecentPRs(range.from, range.to),
-      );
-      final topExercises = await _cachedOrFallback(
-        () => _datasource.getTopExercisesCached(limit: 5),
-        () => _datasource.getTopExercises(limit: 5),
-      );
-      final weeklyVolume = await _cachedOrFallback(
-        () => _datasource.getWeeklyVolumeCached(range.from, range.to),
-        () => _datasource.getWeeklyVolume(range.from, range.to),
-      );
-      final previousWeeklyVolume = await _cachedOrFallback(
-        () => _datasource.getWeeklyVolumeCached(prevFrom, prevTo),
-        () => _datasource.getWeeklyVolume(prevFrom, prevTo),
-      );
-      final volumeDensity = await _cachedOrFallback(
-        () => _datasource.getVolumeDensityCached(),
-        () => _datasource.getVolumeDensity(),
-      );
-      final weeklyRhythm = await _cachedOrFallback(
-        () => _datasource.getWeeklyRhythmCached(),
-        () => _datasource.getWeeklyRhythm(),
-      );
-
-      // Métodos sin versión cached — usar originales directamente
-      final muscleDistribution = await _datasource.getMuscleDistribution(
-        range.from,
-        range.to,
-      );
-      final consistency = await _datasource.getTrainingDays(
-        range.from,
-        range.to,
-      );
-      final durationStats = await _datasource.getDurationStats(
-        range.from,
-        range.to,
-      );
-      final trainingStyle = await _datasource.getTrainingStyle(
-        range.from,
-        range.to,
-      );
-
-      if (mounted) {
-        setState(() {
-          _summary = summary;
-          _recentPRs = recentPRs;
-          _topExercises = topExercises;
-          _weeklyVolume = weeklyVolume;
-          _previousWeeklyVolume = previousWeeklyVolume;
-          _muscleDistribution = muscleDistribution;
-          _consistency = consistency;
-          _durationStats = durationStats;
-          _volumeDensity = volumeDensity;
-          _trainingStyle = trainingStyle;
-          _weeklyRhythm = weeklyRhythm;
-          _loading = false;
-          _hasLoadedOnce = true;
-        });
-
-        // Verificar staleness del cache
-        await _checkAndScheduleStaleState();
-      }
-    } catch (e, st) {
-      debugPrint('[AnalyticsScreen] Cache load error: $e\n$st');
-      if (mounted) {
-        setState(() {
-          _error = 'Error al cargar las analíticas';
-          _loading = false;
-          _isUsingStaleData = false;
-        });
-      }
-    }
-  }
-
-  /// Intenta método cached; si falla, cae al método original.
-  Future<T> _cachedOrFallback<T>(
-    Future<T> Function() cachedFn,
-    Future<T> Function() fallbackFn,
-  ) async {
-    try {
-      return await cachedFn();
-    } catch (e) {
-      debugPrint('[AnalyticsScreen] Cached method failed, using fallback: $e');
-      return await fallbackFn();
-    }
-  }
-
-  /// Verifica si alguna clave de cache está stale y programa re-chequeo.
-  Future<void> _checkAndScheduleStaleState() async {
-    final range = _period.dateRange();
-    final fromUtc = range.from.toUtc().toIso8601String();
-    final toUtc = range.to.toUtc().toIso8601String();
-
-    final staleChecks = await Future.wait([
-      CacheManager.getStale('analytics_summary_${fromUtc}_$toUtc'),
-      CacheManager.getStale('analytics_recent_prs_${fromUtc}_$toUtc'),
-      CacheManager.getStale('analytics_top_exercises_5'),
-      CacheManager.getStale('analytics_volume_density'),
-      CacheManager.getStale('analytics_weekly_rhythm'),
-    ]);
-
-    final anyStale = staleChecks.any((entry) => entry?.isExpired == true);
-
-    if (mounted) {
-      setState(() => _isUsingStaleData = anyStale);
-    }
-
-    // Programar re-chequeo tras 5s — para limpiar indicador cuando
-    // el background refresh (disparado por _swr) complete.
-    Future.delayed(const Duration(seconds: 5), () async {
-      if (!mounted) return;
-      final recheck = await Future.wait([
-        CacheManager.getStale('analytics_summary_${fromUtc}_$toUtc'),
-        CacheManager.getStale('analytics_volume_density'),
-      ]);
-      final stillStale = recheck.any((entry) => entry?.isExpired == true);
-      if (mounted && _isUsingStaleData && !stillStale) {
-        setState(() => _isUsingStaleData = false);
-      }
+    // Carga inicial post-frame para evitar llamar notifyListeners durante build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AnalyticsProvider>().loadInitial();
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AnalyticsProvider>();
+
     return Scaffold(
       backgroundColor: AppTheme.appBackground,
       appBar: AppBar(
@@ -283,23 +48,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadAllData,
+        onRefresh: provider.forceRefresh,
         color: AppTheme.neonGreen,
         backgroundColor: AppTheme.cardBackground,
-        child: _loading
+        child: provider.isLoading && !provider.hasLoadedOnce
             ? const Center(
                 child: CircularProgressIndicator(color: AppTheme.neonGreen),
               )
-            : _error != null
-            ? _buildErrorView()
-            : _buildDashboard(),
+            : provider.error != null && !provider.hasLoadedOnce
+                ? _buildErrorView(provider)
+                : _buildDashboard(provider),
       ),
     );
   }
 
-  Widget _buildDashboard() {
+  Widget _buildDashboard(AnalyticsProvider provider) {
     final hasWorkouts =
-        (_summary?.sessionCount ?? 0) > 0 || _topExercises.isNotEmpty;
+        (provider.summary?.sessionCount ?? 0) > 0 ||
+        provider.topExercises.isNotEmpty;
 
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -308,8 +74,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          _buildPeriodSelector(),
-          if (_isUsingStaleData) ...[
+          _buildPeriodSelector(provider),
+          if (provider.isUsingStaleData) ...[
             const SizedBox(height: 8),
             _buildStaleDataBanner(),
           ],
@@ -318,30 +84,30 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             _buildEmptyGlobalBanner(),
           ],
           const SizedBox(height: 24),
-          _buildKPIRow(),
+          _buildKPIRow(provider),
           const SizedBox(height: 24),
-          _buildRecordsCard(),
+          _buildRecordsCard(provider),
           const SizedBox(height: 24),
-          _buildWeeklyVolumeCard(),
+          _buildWeeklyVolumeCard(provider),
           const SizedBox(height: 24),
-          _buildMuscleDistributionCard(),
+          _buildMuscleDistributionCard(provider),
           const SizedBox(height: 24),
-          _buildConsistencyCard(),
+          _buildConsistencyCard(provider),
           const SizedBox(height: 24),
-          _buildDurationCard(),
+          _buildDurationCard(provider),
           const SizedBox(height: 24),
-          _buildVolumeDensityCard(),
+          _buildVolumeDensityCard(provider),
           const SizedBox(height: 24),
-          _buildTrainingStyleCard(),
+          _buildTrainingStyleCard(provider),
           const SizedBox(height: 24),
-          _buildWeeklyRhythmCard(),
+          _buildWeeklyRhythmCard(provider),
           const SizedBox(height: 40),
         ],
       ),
     );
   }
 
-  Widget _buildPeriodSelector() => SingleChildScrollView(
+  Widget _buildPeriodSelector(AnalyticsProvider provider) => SingleChildScrollView(
     scrollDirection: Axis.horizontal,
     child: Row(
       children: AnalyticsPeriod.values
@@ -350,17 +116,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(
                 label: Text(p.label),
-                selected: _period == p,
+                selected: provider.period == p,
                 onSelected: (selected) {
-                  if (selected) {
-                    setState(() => _period = p);
-                    _loadDataWithCache();
-                  }
+                  if (selected) provider.changePeriod(p);
                 },
                 selectedColor: AppTheme.neonGreen,
                 backgroundColor: AppTheme.cardBackground,
                 labelStyle: TextStyle(
-                  color: _period == p
+                  color: provider.period == p
                       ? AppTheme.appBackground
                       : AppTheme.textGrey,
                   fontWeight: FontWeight.w600,
@@ -373,11 +136,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     ),
   );
 
-  Widget _buildKPIRow() {
-    final volumeText = _summary != null
-        ? _summary!.totalVolume >= 1000
-              ? '${(_summary!.totalVolume / 1000).toStringAsFixed(1)}k'
-              : _summary!.totalVolume.toStringAsFixed(0)
+  Widget _buildKPIRow(AnalyticsProvider provider) {
+    final summary = provider.summary;
+    final volumeText = summary != null
+        ? summary.totalVolume >= 1000
+              ? '${(summary.totalVolume / 1000).toStringAsFixed(1)}k'
+              : summary.totalVolume.toStringAsFixed(0)
         : '0';
 
     return Row(
@@ -385,7 +149,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         Expanded(
           child: _kpiCard(
             'Sesiones',
-            '${_summary?.sessionCount ?? 0}',
+            '${summary?.sessionCount ?? 0}',
             Icons.fitness_center,
           ),
         ),
@@ -397,7 +161,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         Expanded(
           child: _kpiCard(
             'Racha actual',
-            _buildRachaValue(),
+            _buildRachaValue(provider.consistency),
             Icons.local_fire_department,
           ),
         ),
@@ -432,7 +196,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     ),
   );
 
-  Widget _buildRecordsCard() => _sectionCard(
+  Widget _buildRecordsCard(AnalyticsProvider provider) => _sectionCard(
     title: 'RÉCORDS',
     icon: Icons.emoji_events_outlined,
     child: Column(
@@ -447,7 +211,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        if (_recentPRs.isEmpty)
+        if (provider.recentPRs.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Text(
@@ -456,7 +220,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
           )
         else
-          ..._recentPRs
+          ...provider.recentPRs
               .take(5)
               .map(
                 (pr) => Padding(
@@ -514,13 +278,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        if (_topExercises.isEmpty)
+        if (provider.topExercises.isEmpty)
           const Text(
             'Sin datos registrados aún',
             style: TextStyle(color: Colors.white54, fontSize: 13),
           )
         else
-          ..._topExercises.map((top) {
+          ...provider.topExercises.map((top) {
             Color rankColor = Colors.white54;
             if (top.rank == 1) rankColor = const Color(0xFFFFD700);
             if (top.rank == 2) rankColor = const Color(0xFFC0C0C0);
@@ -569,12 +333,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     ),
   );
 
-  Widget _buildWeeklyVolumeCard() {
-    final currentTotal = _weeklyVolume.fold<double>(
+  Widget _buildWeeklyVolumeCard(AnalyticsProvider provider) {
+    final currentTotal = provider.weeklyVolume.fold<double>(
       0,
       (sum, w) => sum + w.totalVolume,
     );
-    final prevTotal = _previousWeeklyVolume.fold<double>(
+    final prevTotal = provider.previousWeeklyVolume.fold<double>(
       0,
       (sum, w) => sum + w.totalVolume,
     );
@@ -593,14 +357,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           SizedBox(
             height: 180,
             child: AppBarChart(
-              values: _weeklyVolume.map((w) => w.totalVolume).toList(),
-              labels: _weeklyVolume
+              values: provider.weeklyVolume.map((w) => w.totalVolume).toList(),
+              labels: provider.weeklyVolume
                   .map((w) => 'S${_weekNumber(w.weekStart)}')
                   .toList(),
+              barColor: AppTheme.neonGreen,
               yFormatter: (val) => val >= 1000
                   ? '${(val / 1000).toStringAsFixed(1)}k'
                   : val.toStringAsFixed(0),
-              labelInterval: _barLabelInterval(_weeklyVolume.length),
+              labelInterval: _barLabelInterval(provider.weeklyVolume.length),
             ),
           ),
           const SizedBox(height: 16),
@@ -619,61 +384,62 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildMuscleDistributionCard() => _sectionCard(
-    title: 'DISTRIBUCIÓN MUSCULAR',
-    icon: Icons.pie_chart_outline,
-    child: _muscleDistribution.isEmpty
-        ? const Text(
-            'Sin entrenamientos en este periodo',
-            style: TextStyle(color: Colors.white54),
-          )
-        : Column(
-            children: _muscleDistribution
-                .map(
-                  (m) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildMuscleDistributionCard(AnalyticsProvider provider) =>
+      _sectionCard(
+        title: 'DISTRIBUCIÓN MUSCULAR',
+        icon: Icons.pie_chart_outline,
+        child: provider.muscleDistribution.isEmpty
+            ? const Text(
+                'Sin entrenamientos en este periodo',
+                style: TextStyle(color: Colors.white54),
+              )
+            : Column(
+                children: provider.muscleDistribution
+                    .map(
+                      (m) => Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              m.muscleGroup,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  m.muscleGroup,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                Text(
+                                  '${m.percentage.toStringAsFixed(1)}%',
+                                  style: const TextStyle(
+                                    color: AppTheme.neonGreen,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
-                            Text(
-                              '${m.percentage.toStringAsFixed(1)}%',
-                              style: const TextStyle(
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: m.percentage / 100,
+                                backgroundColor: Colors.white10,
                                 color: AppTheme.neonGreen,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
+                                minHeight: 6,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: m.percentage / 100,
-                            backgroundColor: Colors.white10,
-                            color: AppTheme.neonGreen,
-                            minHeight: 6,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-  );
+                      ),
+                    )
+                    .toList(),
+              ),
+      );
 
-  Widget _buildConsistencyCard() => _sectionCard(
+  Widget _buildConsistencyCard(AnalyticsProvider provider) => _sectionCard(
     title: 'CONSISTENCIA',
     icon: Icons.calendar_today_outlined,
     child: Column(
@@ -683,34 +449,34 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           children: [
             _miniStat(
               'Racha actual',
-              '${_consistency?.currentStreak ?? 0} ${(_consistency?.currentStreak ?? 0) == 1 ? 'día' : 'días'}',
+              '${provider.consistency?.currentStreak ?? 0} ${(provider.consistency?.currentStreak ?? 0) == 1 ? 'día' : 'días'}',
             ),
             _miniStat(
               'Mejor racha',
-              '${_consistency?.bestStreak ?? 0} ${(_consistency?.bestStreak ?? 0) == 1 ? 'día' : 'días'}',
+              '${provider.consistency?.bestStreak ?? 0} ${(provider.consistency?.bestStreak ?? 0) == 1 ? 'día' : 'días'}',
             ),
             _miniStat(
               'Media/sem',
-              '${_consistency?.avgDaysPerWeek.toStringAsFixed(1) ?? '0'} d',
+              '${provider.consistency?.avgDaysPerWeek.toStringAsFixed(1) ?? '0'} d',
             ),
           ],
         ),
         const SizedBox(height: 20),
-        _buildCalendarConsistency(),
+        _buildCalendarConsistency(provider),
       ],
     ),
   );
 
-  Widget _buildCalendarConsistency() {
+  Widget _buildCalendarConsistency(AnalyticsProvider provider) {
     final now = DateTime.now();
     final trainingDaysSet =
-        _consistency?.trainingDays
+        provider.consistency?.trainingDays
             .map((d) => DateTime(d.year, d.month, d.day))
             .toSet() ??
         {};
 
     int maxMonths;
-    switch (_period) {
+    switch (provider.period) {
       case AnalyticsPeriod.oneMonth:
         maxMonths = 1;
         break;
@@ -747,7 +513,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildMonthCalendar(DateTime month, Set<DateTime> trainingDays) {
     final monthName = DateFormat('MMMM yyyy', 'es_ES').format(month);
     final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
-    final firstWeekday = DateTime(month.year, month.month, 1).weekday; // 1=Mon
+    final firstWeekday = DateTime(month.year, month.month, 1).weekday;
     const dayHeaders = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
     final today = DateTime(
       DateTime.now().year,
@@ -831,7 +597,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     ),
   );
 
-  Widget _buildDurationCard() => _sectionCard(
+  Widget _buildDurationCard(AnalyticsProvider provider) => _sectionCard(
     title: 'DURACIÓN',
     icon: Icons.timer_outlined,
     child: Row(
@@ -839,43 +605,41 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         Expanded(
           child: _miniStat(
             'Media por sesión',
-            '${_durationStats?.avgMinutes ?? 0} min',
+            '${provider.durationStats?.avgMinutes ?? 0} min',
           ),
         ),
         Expanded(
           child: _miniStat(
             'Sesión más larga',
-            '${_durationStats?.longestMinutes ?? 0} min',
+            '${provider.durationStats?.longestMinutes ?? 0} min',
           ),
         ),
       ],
     ),
   );
 
-  // ── EZE-168 section cards ────────────────────────────────────────────────
-
-  Widget _buildVolumeDensityCard() => _sectionCard(
+  Widget _buildVolumeDensityCard(AnalyticsProvider provider) => _sectionCard(
     title: 'DENSIDAD DE VOLUMEN',
     icon: Icons.compress_rounded,
-    child: _volumeDensity == null
+    child: provider.volumeDensity == null
         ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
-        : VolumeDensityChart(data: _volumeDensity!),
+        : VolumeDensityChart(data: provider.volumeDensity!),
   );
 
-  Widget _buildTrainingStyleCard() => _sectionCard(
+  Widget _buildTrainingStyleCard(AnalyticsProvider provider) => _sectionCard(
     title: 'ESTILO DE ENTRENAMIENTO',
     icon: Icons.pie_chart_outline_rounded,
-    child: _trainingStyle == null
+    child: provider.trainingStyle == null
         ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
-        : TrainingStyleChart(data: _trainingStyle!),
+        : TrainingStyleChart(data: provider.trainingStyle!),
   );
 
-  Widget _buildWeeklyRhythmCard() => _sectionCard(
+  Widget _buildWeeklyRhythmCard(AnalyticsProvider provider) => _sectionCard(
     title: 'RITMO SEMANAL',
     icon: Icons.radar_rounded,
-    child: _weeklyRhythm == null
+    child: provider.weeklyRhythm == null
         ? const Text('Sin datos', style: TextStyle(color: Colors.white54))
-        : WeeklyRhythmChart(data: _weeklyRhythm!),
+        : WeeklyRhythmChart(data: provider.weeklyRhythm!),
   );
 
   // ── UI Helpers ──────────────────────────────────────────────────────────
@@ -1013,16 +777,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     ),
   );
 
-  Widget _buildErrorView() => Center(
+  Widget _buildErrorView(AnalyticsProvider provider) => Center(
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
         const SizedBox(height: 16),
-        Text(_error!, style: const TextStyle(color: AppTheme.textGrey)),
+        Text(provider.error!, style: const TextStyle(color: AppTheme.textGrey)),
         const SizedBox(height: 24),
         ElevatedButton(
-          onPressed: _loadAllData,
+          onPressed: provider.forceRefresh,
           style: ElevatedButton.styleFrom(backgroundColor: AppTheme.neonGreen),
           child: const Text(
             'Reintentar',
@@ -1033,8 +797,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     ),
   );
 
-  String _buildRachaValue() {
-    final streak = _consistency?.currentStreak ?? 0;
+  String _buildRachaValue(ConsistencyModel? consistency) {
+    final streak = consistency?.currentStreak ?? 0;
     if (streak == 0) return '—';
     return '$streak ${streak == 1 ? 'día' : 'días'}';
   }
@@ -1050,6 +814,4 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     if (barCount <= 28) return 4;
     return 8;
   }
-
-  DateTime _toDateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 }

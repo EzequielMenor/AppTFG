@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../features/analytics/data/datasources/analytics_datasource.dart';
 import '../../../../features/analytics/data/models/analytics_models.dart';
-import '../../data/datasources/routine_datasource.dart';
+import '../providers/analytics_provider.dart' as analytics_providers;
+import '../providers/routine_provider.dart';
 import '../../data/models/routine_models.dart';
 
 class CreateRoutineScreen extends StatefulWidget {
@@ -73,7 +74,7 @@ class _CreateRoutineScreenState extends State<CreateRoutineScreen> {
         };
       }).toList();
 
-      final routine = await RoutineDatasource().createRoutine(
+      final routine = await context.read<RoutineProvider>().createRoutine(
         name: _nameCtrl.text.trim(),
         description: _descCtrl.text.trim().isEmpty
             ? null
@@ -81,16 +82,7 @@ class _CreateRoutineScreenState extends State<CreateRoutineScreen> {
         exercises: exercisesPayload,
       );
 
-      if (mounted) Navigator.of(context).pop(routine);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (routine != null && mounted) Navigator.of(context).pop(routine);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -210,7 +202,6 @@ class _SelectedExercise {
   _SelectedExercise({required this.exercise})
     : series = [const RoutineSeriesModel(setOrder: 1)];
 
-  /// Preview string: "3 series: 60kg×8-12, 65kg×8-12, —"
   String get seriesPreview {
     final parts = series.map((s) => s.displayText).toList();
     return '${series.length} serie${series.length == 1 ? '' : 's'}: ${parts.join(", ")}';
@@ -246,10 +237,9 @@ class _ExerciseItemState extends State<_ExerciseItem> {
   }
 
   void _removeSeries(int index) {
-    if (widget.exercise.series.length <= 1) return; // keep at least 1
+    if (widget.exercise.series.length <= 1) return;
     setState(() {
       widget.exercise.series.removeAt(index);
-      // reorder
       for (int i = 0; i < widget.exercise.series.length; i++) {
         widget.exercise.series[i] = RoutineSeriesModel(
           setOrder: i + 1,
@@ -291,7 +281,6 @@ class _ExerciseItemState extends State<_ExerciseItem> {
       ),
       child: Column(
         children: [
-          // Header row
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
@@ -338,7 +327,6 @@ class _ExerciseItemState extends State<_ExerciseItem> {
               ],
             ),
           ),
-          // Series expansion tile
           Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
@@ -428,7 +416,6 @@ class _SeriesRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          // Series number
           SizedBox(
             width: 24,
             child: Text(
@@ -438,7 +425,6 @@ class _SeriesRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          // Weight field
           Expanded(
             child: _NumberField(
               label: 'kg',
@@ -449,7 +435,6 @@ class _SeriesRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          // Reps min
           Expanded(
             child: _NumberField(
               label: 'min',
@@ -460,7 +445,6 @@ class _SeriesRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          // Reps max
           Expanded(
             child: _NumberField(
               label: 'max',
@@ -471,7 +455,6 @@ class _SeriesRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 4),
-          // Delete button
           SizedBox(
             width: 28,
             child: canDelete
@@ -568,7 +551,9 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
 
   Future<void> _load() async {
     try {
-      final exercises = await AnalyticsDatasource().getExercises();
+      final exercises =
+          await context.read<analytics_providers.AnalyticsProvider>()
+              .getExercises();
       final groups =
           exercises
               .where((e) => e.muscleGroup != null)
@@ -752,7 +737,8 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                             color: Colors.grey,
                             size: 22,
                           ),
-                          onPressed: () => _showExercisePreview(context, ex),
+                          onPressed: () =>
+                              _showExercisePreview(context, ex),
                         ),
                       );
                     },

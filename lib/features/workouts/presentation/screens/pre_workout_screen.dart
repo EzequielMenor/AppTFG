@@ -1,9 +1,10 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../data/datasources/routine_datasource.dart';
 import '../../data/models/routine_models.dart';
+import '../providers/routine_provider.dart';
 import 'create_routine_screen.dart';
 import 'csv_import_sheet.dart';
 
@@ -15,33 +16,12 @@ class PreWorkoutScreen extends StatefulWidget {
 }
 
 class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
-  List<RoutineModel> _routines = [];
-  bool _loading = true;
-  String? _error;
-
   @override
   void initState() {
     super.initState();
-    _loadRoutines();
-  }
-
-  Future<void> _loadRoutines() async {
-    setState(() {
-      _loading = true;
-      _error = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RoutineProvider>().loadRoutines();
     });
-    try {
-      final routines = await RoutineDatasource().getRoutines();
-      setState(() {
-        _routines = routines;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
-    }
   }
 
   void _startRoutine(RoutineModel routine) {
@@ -79,15 +59,14 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
       ),
     );
     if (confirmed != true) return;
-    try {
-      await RoutineDatasource().deleteRoutine(routine.id);
-      _loadRoutines();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+    final deleted = await context.read<RoutineProvider>().deleteRoutine(routine.id);
+    if (!deleted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${context.read<RoutineProvider>().error}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -109,7 +88,7 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
         backgroundColor: Colors.transparent,
         builder: (_) => CsvImportSheet(
           csvContent: content,
-          onImported: _loadRoutines,
+          onImported: () => context.read<RoutineProvider>().loadRoutines(),
         ),
       );
     } catch (e) {
@@ -129,11 +108,15 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
       MaterialPageRoute(
           builder: (_) => const CreateRoutineScreen()),
     );
-    if (result != null) _loadRoutines();
+    if (result != null) {
+      context.read<RoutineProvider>().loadRoutines();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final prov = context.watch<RoutineProvider>();
+
     return Scaffold(
       backgroundColor: AppTheme.appBackground,
       appBar: AppBar(
@@ -150,7 +133,7 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: _buildRoutineList(),
+            child: _buildRoutineList(prov),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -173,20 +156,20 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
     );
   }
 
-  Widget _buildRoutineList() {
-    if (_loading) {
+  Widget _buildRoutineList(RoutineProvider prov) {
+    if (prov.isLoading && prov.routines.isEmpty) {
       return const Center(
           child: CircularProgressIndicator(color: AppTheme.neonGreen));
     }
-    if (_error != null) {
+    if (prov.error != null && prov.routines.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, style: const TextStyle(color: Colors.red)),
+            Text(prov.error!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 12),
             TextButton(
-              onPressed: _loadRoutines,
+              onPressed: () => context.read<RoutineProvider>().loadRoutines(),
               child: const Text('Reintentar',
                   style: TextStyle(color: AppTheme.neonGreen)),
             ),
@@ -207,7 +190,7 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
               letterSpacing: 1),
         ),
         const SizedBox(height: 8),
-        if (_routines.isEmpty)
+        if (prov.routines.isEmpty && !prov.isLoading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Text(
@@ -215,7 +198,7 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
               style: TextStyle(color: Colors.grey),
             ),
           ),
-        ..._routines.map((r) => _RoutineCard(
+        ...prov.routines.map((r) => _RoutineCard(
               routine: r,
               onTap: () => _startRoutine(r),
               onLongPress: () => _deleteRoutine(r),

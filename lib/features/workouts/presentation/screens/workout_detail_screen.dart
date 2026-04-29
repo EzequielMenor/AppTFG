@@ -1,9 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../../core/network/api_client.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../analytics/presentation/screens/exercise_detail_screen.dart';
+import '../../data/models/workout_models.dart';
+import '../providers/workout_provider.dart';
 
 class WorkoutDetailScreen extends StatefulWidget {
   final int workoutId;
@@ -15,37 +16,17 @@ class WorkoutDetailScreen extends StatefulWidget {
 }
 
 class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
-  bool _isLoading = true;
-  Map<String, dynamic>? _workout;
   bool _visible = false;
 
-  // ── Colores del diseño ─────────────────────────────────────────────────────
   static const _cardBg = Color(0xFF1E1E1E);
   static const _exerciseBg = Color(0xFF1C1C1E);
 
   @override
   void initState() {
     super.initState();
-    _fetchWorkout();
-  }
-
-  Future<void> _fetchWorkout() async {
-    try {
-      final response = await ApiClient.get('/api/workouts/${widget.workoutId}');
-      if (response.statusCode == 200) {
-        setState(() {
-          _workout = json.decode(utf8.decode(response.bodyBytes));
-          _isLoading = false;
-        });
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted) setState(() => _visible = true);
-        });
-      } else {
-        setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<WorkoutProvider>().loadWorkoutDetail(widget.workoutId);
+    });
   }
 
   Future<void> _deleteWorkout() async {
@@ -71,18 +52,14 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         ],
       ),
     );
-    if (confirm == true) {
-      try {
-        final response =
-            await ApiClient.delete('/api/workouts/${widget.workoutId}');
-        if (response.statusCode == 204 || response.statusCode == 200) {
-          if (!mounted) return;
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Entrenamiento eliminado')),
-          );
-        }
-      } catch (_) {}
+    if (confirm == true && mounted) {
+      await context.read<WorkoutProvider>().deleteWorkout(widget.workoutId);
+      if (mounted) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Entrenamiento eliminado')),
+        );
+      }
     }
   }
 
@@ -97,18 +74,16 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     return '${m}m';
   }
 
-  String _formatVolume(dynamic vol) {
+  String _formatVolume(double? vol) {
     if (vol == null) return '0 kg';
-    final num v = (vol is num) ? vol : num.tryParse(vol.toString()) ?? 0;
     final fmt = NumberFormat('#,##0', 'en_US');
-    return '${fmt.format(v.toInt())} kg';
+    return '${fmt.format(vol.toInt())} kg';
   }
 
-  int _countTotalSets(List exercises) {
+  int _countTotalSets(List<WorkoutExerciseModel> exercises) {
     int total = 0;
     for (final ex in exercises) {
-      final series = ex['series'] as List? ?? [];
-      total += series.length;
+      total += ex.sets.length;
     }
     return total;
   }
@@ -121,20 +96,23 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<WorkoutProvider>();
+    final workout = provider.selectedWorkout;
+
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: _buildAppBar(),
-      body: _isLoading
+      body: provider.isLoading && workout == null
           ? const Center(
               child: CircularProgressIndicator(color: AppTheme.neonGreen))
-          : _workout == null
+          : workout == null
               ? const Center(
                   child: Text('Error al cargar',
                       style: TextStyle(color: Colors.white)))
               : AnimatedOpacity(
                   opacity: _visible ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 400),
-                  child: _buildContent(),
+                  child: _buildContent(workout),
                 ),
     );
   }
@@ -164,13 +142,11 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
               side: const BorderSide(color: AppTheme.neonGreen),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
               minimumSize: const Size(0, 34),
             ),
             child: const Text('Edit',
-                style:
-                    TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
           ),
         ),
         PopupMenuButton<String>(
@@ -198,21 +174,20 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     );
   }
 
-  Widget _buildContent() {
-    final startTime = _workout!['startTime'] != null
-        ? DateTime.parse(_workout!['startTime'])
-        : DateTime.now();
-    final endTime = _workout!['endTime'] != null
-        ? DateTime.parse(_workout!['endTime'])
-        : null;
-    final List exercises = _workout!['exercises'] ?? [];
+  Widget _buildContent(WorkoutModel workout) {
+    // Mostrar animación una vez cargado
+    if (!_visible) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) setState(() => _visible = true);
+      });
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
         // ── Header ──────────────────────────────────────────────────────────
         Text(
-          _workout!['name'] ?? 'Entrenamiento',
+          workout.name ?? 'Entrenamiento',
           style: const TextStyle(
               color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold),
         ),
@@ -223,7 +198,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                 color: Colors.grey, size: 14),
             const SizedBox(width: 6),
             Text(
-              _formatDate(startTime),
+              _formatDate(workout.startTime),
               style: const TextStyle(color: Colors.grey, fontSize: 14),
             ),
           ],
@@ -234,23 +209,21 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         IntrinsicHeight(
           child: Row(
             children: [
-              _buildStatCard('DURATION', _formatDuration(startTime, endTime)),
+              _buildStatCard('DURATION', _formatDuration(workout.startTime, workout.endTime)),
               const SizedBox(width: 10),
-              _buildStatCard(
-                  'VOLUME', _formatVolume(_workout!['totalVolume'])),
+              _buildStatCard('VOLUME', _formatVolume(workout.totalVolume)),
               const SizedBox(width: 10),
-              _buildStatCard('SETS', '${_countTotalSets(exercises)}'),
+              _buildStatCard('SETS', '${_countTotalSets(workout.exercises)}'),
             ],
           ),
         ),
         const SizedBox(height: 24),
 
         // ── Exercise cards ──────────────────────────────────────────────────
-        ...exercises.map((ex) => _buildExerciseCard(ex as Map<String, dynamic>)),
+        ...workout.exercises.map((ex) => _buildExerciseCard(ex)),
 
         // ── Notes ───────────────────────────────────────────────────────────
-        if (_workout!['notes'] != null &&
-            _workout!['notes'].toString().isNotEmpty)
+        if (workout.notes != null && workout.notes!.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 8),
             padding: const EdgeInsets.all(16),
@@ -268,7 +241,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
-                Text(_workout!['notes'],
+                Text(workout.notes!,
                     style:
                         const TextStyle(color: Colors.white70, fontSize: 14)),
               ],
@@ -279,14 +252,14 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   }
 
   Widget _exerciseIcon() => Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: AppTheme.neonGreen,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: const Icon(Icons.fitness_center, color: Colors.black, size: 22),
-      );
+    width: 44,
+    height: 44,
+    decoration: BoxDecoration(
+      color: AppTheme.neonGreen,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: const Icon(Icons.fitness_center, color: Colors.black, size: 22),
+  );
 
   Widget _buildStatCard(String label, String value) {
     return Expanded(
@@ -321,29 +294,17 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     );
   }
 
-  Widget _buildExerciseCard(Map<String, dynamic> exerciseData) {
-    final exerciseInfo =
-        exerciseData['exercise'] as Map<String, dynamic>? ?? {};
-    final List series = exerciseData['series'] ?? [];
-    final String name = exerciseInfo['name'] ?? 'Ejercicio';
-    final String muscleGroup = exerciseInfo['muscleGroup'] ?? '';
-    final String? thumbnailUrl = exerciseInfo['thumbnailUrl'] as String?;
-    final String? videoUrl = exerciseInfo['videoUrl'] as String?;
-    final int? exerciseId = exerciseInfo['id'] != null
-        ? (exerciseInfo['id'] as num).toInt()
-        : null;
-
+  Widget _buildExerciseCard(WorkoutExerciseModel exercise) {
     void openDetail() {
-      if (exerciseId == null) return;
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ExerciseDetailScreen(
-            exerciseId: exerciseId,
-            exerciseName: name,
-            muscleGroup: muscleGroup.isNotEmpty ? muscleGroup : null,
-            videoUrl: videoUrl,
-            thumbnailUrl: thumbnailUrl,
+            exerciseId: exercise.exerciseId,
+            exerciseName: exercise.exerciseName,
+            muscleGroup: exercise.muscleGroup,
+            videoUrl: exercise.videoUrl,
+            thumbnailUrl: exercise.thumbnailUrl,
           ),
         ),
       );
@@ -366,9 +327,10 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                   onTap: openDetail,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                    child: exercise.thumbnailUrl != null &&
+                            exercise.thumbnailUrl!.isNotEmpty
                         ? Image.network(
-                            thumbnailUrl,
+                            exercise.thumbnailUrl!,
                             width: 44,
                             height: 44,
                             fit: BoxFit.cover,
@@ -382,13 +344,13 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name,
+                      Text(exercise.exerciseName,
                           style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 16)),
-                      if (muscleGroup.isNotEmpty)
-                        Text(muscleGroup,
+                      if (exercise.muscleGroup != null)
+                        Text(exercise.muscleGroup!,
                             style: const TextStyle(
                                 color: Colors.grey, fontSize: 13)),
                     ],
@@ -432,9 +394,9 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           ),
 
           // ── Series rows ────────────────────────────────────────────────
-          ...series.asMap().entries.map((entry) {
-            final serie = entry.value as Map<String, dynamic>;
-            final bool isWarmup = serie['isWarmup'] == true;
+          ...exercise.sets.asMap().entries.map((entry) {
+            final serie = entry.value;
+            final bool isWarmup = serie.isWarmup;
             final Color setColor =
                 isWarmup ? Colors.orange : Colors.grey;
             return Padding(
@@ -444,7 +406,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                 children: [
                   _SetCol(
                     child: Text(
-                      '${serie['setOrder'] ?? entry.key + 1}',
+                      '${serie.setOrder}',
                       style: TextStyle(
                           color: setColor,
                           fontSize: 15,
@@ -453,7 +415,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                   ),
                   _KgCol(
                     child: Text(
-                      _stripTrailingZeros(serie['weight']),
+                      _stripTrailingZeros(serie.weight),
                       style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -462,7 +424,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                   ),
                   _RepsCol(
                     child: Text(
-                      '${serie['reps'] ?? 0}',
+                      '${serie.reps ?? 0}',
                       style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -471,9 +433,9 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                   ),
                   _RpeCol(
                     child: Text(
-                      _formatRpe(serie['rpe']),
+                      _formatRpe(serie.rpe),
                       style: TextStyle(
-                          color: serie['rpe'] != null
+                          color: serie.rpe != null
                               ? Colors.orange.shade300
                               : Colors.grey.shade700,
                           fontSize: 14,
@@ -481,16 +443,18 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                     ),
                   ),
                   _DoneCol(
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: const BoxDecoration(
-                        color: AppTheme.neonGreen,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.check,
-                          color: Colors.black, size: 18),
-                    ),
+                    child: serie.done
+                        ? Container(
+                            width: 28,
+                            height: 28,
+                            decoration: const BoxDecoration(
+                              color: AppTheme.neonGreen,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.check,
+                                color: Colors.black, size: 18),
+                          )
+                        : const SizedBox.shrink(),
                   ),
                 ],
               ),
@@ -502,7 +466,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     );
   }
 
-  /// Elimina ceros decimales innecesarios: "100.00" → "100", "102.50" → "102.5"
   String _stripTrailingZeros(dynamic val) {
     if (val == null) return '0';
     final d = double.tryParse(val.toString());
@@ -512,7 +475,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         : d.toString();
   }
 
-  /// "@8" / "@8.5" si hay RPE, "—" si no
   String _formatRpe(dynamic rpe) {
     if (rpe == null) return '—';
     final d = double.tryParse(rpe.toString());
@@ -520,8 +482,6 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     return '@${d == d.truncateToDouble() ? d.toInt() : d}';
   }
 }
-
-// ── Columnas de la tabla (proporciones fijas) ──────────────────────────────
 
 const _headerStyle = TextStyle(
     color: Colors.grey,

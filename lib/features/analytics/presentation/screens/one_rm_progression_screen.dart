@@ -1,12 +1,13 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/chart_theme.dart';
 import '../../../../shared/widgets/charts/app_line_chart.dart';
-import '../../data/datasources/analytics_datasource.dart';
 import '../../data/models/analytics_models.dart';
+import '../providers/analytics_provider.dart';
 
 enum _TimePeriod { oneMonth, threeMonths, sixMonths, oneYear, all }
 
@@ -53,8 +54,6 @@ class OneRmProgressionScreen extends StatefulWidget {
 }
 
 class _OneRmProgressionScreenState extends State<OneRmProgressionScreen> {
-  final _datasource = AnalyticsDatasource();
-
   List<ExerciseModel> _exercises = [];
   ExerciseModel? _selectedExercise;
 
@@ -75,7 +74,8 @@ class _OneRmProgressionScreenState extends State<OneRmProgressionScreen> {
 
   Future<void> _loadExercises() async {
     try {
-      final exercises = await _datasource.getExercises();
+      final provider = context.read<AnalyticsProvider>();
+      final exercises = await provider.getExercises();
       setState(() {
         _exercises = exercises;
         _selectedExercise = exercises.isNotEmpty ? exercises.first : null;
@@ -98,7 +98,8 @@ class _OneRmProgressionScreenState extends State<OneRmProgressionScreen> {
       _error = null;
     });
     try {
-      final data = await _datasource.get1RMProgression(exerciseId);
+      final provider = context.read<AnalyticsProvider>();
+      final data = await provider.get1RMProgression(exerciseId);
       setState(() {
         _allData = data;
         _applyFilter();
@@ -117,8 +118,6 @@ class _OneRmProgressionScreenState extends State<OneRmProgressionScreen> {
       _filteredData = _allData.where((d) => _period.includes(d.date)).toList();
     });
   }
-
-  // ── Stats helpers ──────────────────────────────────────────────────────────
 
   Progression1RMModel? get _maxEntry {
     if (_filteredData.isEmpty) return null;
@@ -149,8 +148,6 @@ class _OneRmProgressionScreenState extends State<OneRmProgressionScreen> {
     return (diff: diff, percent: percent);
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -168,63 +165,63 @@ class _OneRmProgressionScreenState extends State<OneRmProgressionScreen> {
   }
 
   Widget _buildBody() => SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildExerciseSelector(),
-            const SizedBox(height: 20),
-            _buildChartCard(),
-            const SizedBox(height: 16),
-            _buildTimePeriodChips(),
-            const SizedBox(height: 20),
-            _buildStatsPanel(),
-            const SizedBox(height: 32),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildExerciseSelector(),
+        const SizedBox(height: 20),
+        _buildChartCard(),
+        const SizedBox(height: 16),
+        _buildTimePeriodChips(),
+        const SizedBox(height: 20),
+        _buildStatsPanel(),
+        const SizedBox(height: 32),
+      ],
+    ),
+  );
 
   Widget _buildExerciseSelector() => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: ChartTheme.gridColor),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<ExerciseModel>(
-            isExpanded: true,
-            value: _selectedExercise,
-            dropdownColor: AppTheme.cardBackground,
-            style: const TextStyle(color: Colors.white, fontSize: 15),
-            icon: const Icon(Icons.keyboard_arrow_down, color: AppTheme.neonGreen),
-            onChanged: (exercise) {
-              if (exercise != null && exercise.id != _selectedExercise?.id) {
-                setState(() => _selectedExercise = exercise);
-                _load1RMProgression(exercise.id);
-              }
-            },
-            items: _exercises
-                .map((e) => DropdownMenuItem(
-                      value: e,
-                      child: Text(e.name),
-                    ))
-                .toList(),
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    decoration: BoxDecoration(
+      color: AppTheme.cardBackground,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: ChartTheme.gridColor),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<ExerciseModel>(
+        isExpanded: true,
+        value: _selectedExercise,
+        dropdownColor: AppTheme.cardBackground,
+        style: const TextStyle(color: Colors.white, fontSize: 15),
+        icon: const Icon(Icons.keyboard_arrow_down, color: AppTheme.neonGreen),
+        onChanged: (exercise) {
+          if (exercise != null && exercise.id != _selectedExercise?.id) {
+            setState(() => _selectedExercise = exercise);
+            _load1RMProgression(exercise.id);
+          }
+        },
+        items: _exercises
+            .map((e) => DropdownMenuItem(
+              value: e,
+              child: Text(e.name),
+            ))
+            .toList(),
+      ),
+    ),
+  );
 
   Widget _buildChartCard() => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: SizedBox(
-          height: 240,
-          child: _buildChartContent(),
-        ),
-      );
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppTheme.cardBackground,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: SizedBox(
+      height: 240,
+      child: _buildChartContent(),
+    ),
+  );
 
   Widget _buildChartContent() {
     if (_loadingProgression) {
@@ -276,32 +273,32 @@ class _OneRmProgressionScreenState extends State<OneRmProgressionScreen> {
   }
 
   Widget _buildTimePeriodChips() => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: _TimePeriod.values
-              .map((period) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(period.label),
-                      selected: _period == period,
-                      onSelected: (_) {
-                        setState(() => _period = period);
-                        _applyFilter();
-                      },
-                      selectedColor: AppTheme.neonGreen,
-                      backgroundColor: AppTheme.cardBackground,
-                      labelStyle: TextStyle(
-                        color: _period == period
-                            ? AppTheme.appBackground
-                            : AppTheme.textGrey,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      side: const BorderSide(color: ChartTheme.gridColor),
-                    ),
-                  ))
-              .toList(),
-        ),
-      );
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: _TimePeriod.values
+          .map((period) => Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(period.label),
+              selected: _period == period,
+              onSelected: (_) {
+                setState(() => _period = period);
+                _applyFilter();
+              },
+              selectedColor: AppTheme.neonGreen,
+              backgroundColor: AppTheme.cardBackground,
+              labelStyle: TextStyle(
+                color: _period == period
+                    ? AppTheme.appBackground
+                    : AppTheme.textGrey,
+                fontWeight: FontWeight.w600,
+              ),
+              side: const BorderSide(color: ChartTheme.gridColor),
+            ),
+          ))
+          .toList(),
+    ),
+  );
 
   Widget _buildStatsPanel() {
     final max = _maxEntry;
@@ -382,29 +379,29 @@ class _OneRmProgressionScreenState extends State<OneRmProgressionScreen> {
       );
 
   Widget _buildErrorBanner() => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.wifi_off_rounded, size: 56, color: AppTheme.textGrey),
-              const SizedBox(height: 16),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.textGrey),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _loadExercises,
-                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.neonGreen),
-                child: const Text('Reintentar',
-                    style: TextStyle(color: AppTheme.appBackground)),
-              ),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.wifi_off_rounded, size: 56, color: AppTheme.textGrey),
+          const SizedBox(height: 16),
+          Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.textGrey),
           ),
-        ),
-      );
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _loadExercises,
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.neonGreen),
+            child: const Text('Reintentar',
+                style: TextStyle(color: AppTheme.appBackground)),
+          ),
+        ],
+      ),
+    ),
+  );
 
   IconData _trendIcon(double? diff) {
     if (diff == null) return Icons.remove;
