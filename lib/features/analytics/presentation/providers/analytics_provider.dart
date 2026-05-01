@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../../../../core/cache/cache_manager.dart';
 import '../../data/datasources/analytics_datasource.dart';

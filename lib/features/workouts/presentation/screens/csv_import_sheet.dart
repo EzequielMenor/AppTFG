@@ -48,7 +48,7 @@ class _ParsedRoutine {
   int get matchedCount => exercises.where((e) => e.matched != null).length;
 }
 
-List<_ParsedRoutine> extractRoutinesFromCsv(String content) {
+List<_ParsedRoutine> _extractRoutinesFromCsv(String content) {
   final lines = content.split('\n');
   if (lines.isEmpty) return [];
 
@@ -136,7 +136,7 @@ class _CsvImportSheetState extends State<CsvImportSheet> {
   Future<void> _parse() async {
     setState(() => _loading = true);
     try {
-      final routines = extractRoutinesFromCsv(widget.csvContent);
+      final routines = _extractRoutinesFromCsv(widget.csvContent);
 
       // Load all DB exercises for matching
       final dbExercises = await context.read<AnalyticsProvider>().getExercises();

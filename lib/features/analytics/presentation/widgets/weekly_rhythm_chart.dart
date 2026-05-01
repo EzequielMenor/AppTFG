@@ -27,7 +27,7 @@ class WeeklyRhythmChart extends StatelessWidget {
               dataSets: [
                 RadarDataSet(
                   dataEntries: normalised.map((v) => RadarEntry(value: v)).toList(),
-                  fillColor: AppTheme.neonGreen.withOpacity(0.2),
+                  fillColor: AppTheme.neonGreen.withValues(alpha: 0.2),
                   borderColor: AppTheme.neonGreen,
                   borderWidth: 2,
                   entryRadius: 3,

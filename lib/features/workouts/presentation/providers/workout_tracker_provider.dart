@@ -1,11 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
 
-import '../../../../core/network/api_client.dart';
 import '../../data/datasources/workout_datasource.dart';
 import '../../data/models/routine_models.dart';
-import '../../data/models/workout_models.dart';
 
 /// Representa un set activo en el tracker (datos editables, sin controllers).
 class TrackerSetData {

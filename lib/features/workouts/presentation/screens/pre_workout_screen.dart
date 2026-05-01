@@ -59,6 +59,7 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
       ),
     );
     if (confirmed != true) return;
+    if (!mounted) return;
     final deleted = await context.read<RoutineProvider>().deleteRoutine(routine.id);
     if (!deleted && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,6 +110,7 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
           builder: (_) => const CreateRoutineScreen()),
     );
     if (result != null) {
+      if (!mounted) return;
       context.read<RoutineProvider>().loadRoutines();
     }
   }

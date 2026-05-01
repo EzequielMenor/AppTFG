@@ -86,7 +86,7 @@ class ApiClient {
         final response = await request();
         _log('$method $path completed with status ${response.statusCode}');
         return response;
-      } on TimeoutException catch (e) {
+      } on TimeoutException catch (_) {
         attempt++;
         if (attempt >= _maxRetries) {
           _log('❌ $method $path - TimeoutException after $attempt attempts');

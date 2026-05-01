@@ -39,7 +39,7 @@ abstract class ChartTheme {
     show: true,
     drawVerticalLine: false,
     horizontalInterval: null,
-    getDrawingHorizontalLine: (_) => FlLine(
+    getDrawingHorizontalLine: (_) => const FlLine(
       color: gridColor,
       strokeWidth: 1,
     ),

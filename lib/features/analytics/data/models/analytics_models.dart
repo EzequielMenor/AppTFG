@@ -17,7 +17,7 @@ class ExerciseModel {
     this.secondaryMuscles = const [],
   });
 
-  /// Parses a dynamic value into a List<String>.
+  /// Parses a dynamic value into a `List` of `String`.
   /// Handles: List → filter strings, String → split by comma, null/other → [].
   static List<String> _parseStringList(dynamic value) {
     if (value == null) return [];

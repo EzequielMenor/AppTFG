@@ -177,7 +177,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     ),
     child: Column(
       children: [
-        Icon(icon, color: AppTheme.neonGreen.withOpacity(0.8), size: 20),
+        Icon(icon, color: AppTheme.neonGreen.withValues(alpha: 0.8), size: 20),
         const SizedBox(height: 8),
         Text(
           value,
@@ -263,7 +263,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.07),
+                color: Colors.white.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text(
@@ -299,7 +299,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     height: 24,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: rankColor.withOpacity(0.2),
+                      color: rankColor.withValues(alpha: 0.2),
                     ),
                     alignment: Alignment.center,
                     child: Text(
@@ -361,7 +361,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               labels: provider.weeklyVolume
                   .map((w) => 'S${_weekNumber(w.weekStart)}')
                   .toList(),
-              barColor: AppTheme.neonGreen,
               yFormatter: (val) => val >= 1000
                   ? '${(val / 1000).toStringAsFixed(1)}k'
                   : val.toStringAsFixed(0),
@@ -577,13 +576,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _dayCellCalendar(int day, bool isTrained, bool isToday) => Container(
     decoration: BoxDecoration(
       color: isTrained
-          ? AppTheme.neonGreen.withOpacity(0.85)
+          ? AppTheme.neonGreen.withValues(alpha: 0.85)
           : isToday
-          ? Colors.white.withOpacity(0.12)
-          : Colors.white.withOpacity(0.04),
+          ? Colors.white.withValues(alpha: 0.12)
+          : Colors.white.withValues(alpha: 0.04),
       borderRadius: BorderRadius.circular(4),
       border: isToday && !isTrained
-          ? Border.all(color: AppTheme.neonGreen.withOpacity(0.5), width: 1)
+          ? Border.all(color: AppTheme.neonGreen.withValues(alpha: 0.5), width: 1)
           : null,
     ),
     alignment: Alignment.center,
@@ -673,7 +672,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ),
             ),
             const Spacer(),
-            if (badge != null) badge,
+            ?badge,
           ],
         ),
         const SizedBox(height: 14),
@@ -687,8 +686,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: (isPositive ? AppTheme.neonGreen : Colors.redAccent).withOpacity(
-          0.15,
+        color: (isPositive ? AppTheme.neonGreen : Colors.redAccent).withValues(
+          alpha: 0.15,
         ),
         borderRadius: BorderRadius.circular(6),
       ),
@@ -725,9 +724,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildStaleDataBanner() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     decoration: BoxDecoration(
-      color: Colors.orangeAccent.withOpacity(0.08),
+      color: Colors.orangeAccent.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: Colors.orangeAccent.withOpacity(0.2)),
+      border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.2)),
     ),
     child: Row(
       children: [
@@ -736,7 +735,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           height: 14,
           child: CircularProgressIndicator(
             strokeWidth: 1.5,
-            color: Colors.orangeAccent.withOpacity(0.7),
+            color: Colors.orangeAccent.withValues(alpha: 0.7),
           ),
         ),
         const SizedBox(width: 10),
@@ -758,16 +757,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
       gradient: LinearGradient(
-        colors: [AppTheme.neonGreen.withOpacity(0.2), Colors.transparent],
+        colors: [AppTheme.neonGreen.withValues(alpha: 0.2), Colors.transparent],
       ),
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppTheme.neonGreen.withOpacity(0.3)),
+      border: Border.all(color: AppTheme.neonGreen.withValues(alpha: 0.3)),
     ),
-    child: Row(
+    child: const Row(
       children: [
-        const Icon(Icons.info_outline, color: AppTheme.neonGreen),
-        const SizedBox(width: 16),
-        const Expanded(
+        Icon(Icons.info_outline, color: AppTheme.neonGreen),
+        SizedBox(width: 16),
+        Expanded(
           child: Text(
             'Registra tu primer entrenamiento para ver tus analíticas.',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
@@ -804,7 +803,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   int _weekNumber(DateTime date) {
-    int dayOfYear = int.parse(DateFormat("D").format(date));
+    int dayOfYear = int.parse(DateFormat('D').format(date));
     return ((dayOfYear - date.weekday + 10) / 7).floor();
   }
 

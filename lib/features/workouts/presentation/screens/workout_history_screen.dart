@@ -28,8 +28,8 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<WorkoutProvider>();
     final user = context.watch<AuthProvider>().user;
-    final initial = (user?.email?.isNotEmpty == true)
-        ? user!.email![0].toUpperCase()
+    final initial = (user?.email.isNotEmpty == true)
+        ? user!.email[0].toUpperCase()
         : '?';
 
     return Scaffold(
@@ -78,7 +78,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withValues(alpha: 0.1),
               child: const Row(
                 children: [
                   SizedBox(

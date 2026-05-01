@@ -106,9 +106,6 @@ class _WorkoutTrackerScreenState extends State<WorkoutTrackerScreen> {
 
   Future<void> _finishWorkout() async {
     final endTime = DateTime.now();
-    final now = _startTime;
-    final autoName =
-        'Entrenamiento ${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
 
     final exercises = <Map<String, dynamic>>[];
     for (int ei = 0; ei < _activeExercises.length; ei++) {

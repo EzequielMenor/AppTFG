@@ -235,18 +235,18 @@ class _OneRmProgressionScreenState extends State<OneRmProgressionScreen> {
       );
     }
     if (_filteredData.length < 2) {
-      return Center(
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.bar_chart_rounded, size: 48, color: AppTheme.textGrey),
-              const SizedBox(height: 12),
+              Icon(Icons.bar_chart_rounded, size: 48, color: AppTheme.textGrey),
+              SizedBox(height: 12),
               Text(
                 'No hay datos suficientes para este ejercicio.\nNecesitas al menos 2 sesiones registradas.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.textGrey, fontSize: 13),
+                style: TextStyle(color: AppTheme.textGrey, fontSize: 13),
               ),
             ],
           ),

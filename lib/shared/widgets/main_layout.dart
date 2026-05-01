@@ -65,12 +65,12 @@ class MainLayout extends StatelessWidget {
         type: BottomNavigationBarType.fixed,
         elevation: 0,
         items: [
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(PhosphorIconsRegular.house),
             activeIcon: Icon(PhosphorIconsFill.house, color: _activeColor),
             label: 'Dashboard',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(PhosphorIconsRegular.clockCounterClockwise),
             activeIcon: Icon(
               PhosphorIconsFill.clockCounterClockwise,
@@ -78,12 +78,12 @@ class MainLayout extends StatelessWidget {
             ),
             label: 'Historial',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(PhosphorIconsRegular.chartBar),
             activeIcon: Icon(PhosphorIconsFill.chartBar, color: _activeColor),
             label: 'Analíticas',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(PhosphorIconsRegular.user),
             activeIcon: Icon(PhosphorIconsFill.user, color: _activeColor),
             label: 'Perfil',
@@ -107,25 +107,25 @@ class MainLayout extends StatelessWidget {
       ),
       unselectedLabelTextStyle: const TextStyle(color: _inactiveColor),
       destinations: [
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(PhosphorIconsRegular.house),
           selectedIcon: Icon(PhosphorIconsFill.house),
-          label: const Text('Dashboard'),
+          label: Text('Dashboard'),
         ),
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(PhosphorIconsRegular.clockCounterClockwise),
           selectedIcon: Icon(PhosphorIconsFill.clockCounterClockwise),
-          label: const Text('Historial'),
+          label: Text('Historial'),
         ),
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(PhosphorIconsRegular.chartBar),
           selectedIcon: Icon(PhosphorIconsFill.chartBar),
-          label: const Text('Analíticas'),
+          label: Text('Analíticas'),
         ),
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(PhosphorIconsRegular.user),
           selectedIcon: Icon(PhosphorIconsFill.user),
-          label: const Text('Perfil'),
+          label: Text('Perfil'),
         ),
       ],
     );

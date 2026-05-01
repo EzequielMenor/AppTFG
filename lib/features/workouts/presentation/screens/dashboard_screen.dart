@@ -291,7 +291,7 @@ class _SectionCard extends StatelessWidget {
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold)),
-              if (trailing != null) trailing!,
+              ?trailing,
             ],
           ),
           const SizedBox(height: 16),
@@ -317,7 +317,7 @@ class _PrTile extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppTheme.neonGreen.withOpacity(0.15),
+              color: AppTheme.neonGreen.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.emoji_events,
@@ -354,7 +354,7 @@ class _PrTile extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppTheme.neonGreen.withOpacity(0.15),
+                  color: AppTheme.neonGreen.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text('NEW PR',

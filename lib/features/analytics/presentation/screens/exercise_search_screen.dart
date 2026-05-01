@@ -299,7 +299,7 @@ class _ExerciseResultTile extends StatelessWidget {
                   width: 44,
                   height: 44,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _defaultIcon(),
+                  errorBuilder: (_, _, _) => _defaultIcon(),
                 )
               : _defaultIcon(),
         ),
@@ -312,7 +312,7 @@ class _ExerciseResultTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: muscleColor.withOpacity(0.2),
+                color: muscleColor.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -332,7 +332,7 @@ class _ExerciseResultTile extends StatelessWidget {
     width: 44,
     height: 44,
     decoration: BoxDecoration(
-      color: AppTheme.neonGreen.withOpacity(0.2),
+      color: AppTheme.neonGreen.withValues(alpha: 0.2),
       borderRadius: BorderRadius.circular(8),
     ),
     child: const Icon(Icons.fitness_center, color: AppTheme.neonGreen, size: 22),

@@ -334,7 +334,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                             width: 44,
                             height: 44,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _exerciseIcon(),
+                            errorBuilder: (_, _, _) => _exerciseIcon(),
                           )
                         : _exerciseIcon(),
                   ),

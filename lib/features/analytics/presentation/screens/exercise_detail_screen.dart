@@ -8,7 +8,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/chart_theme.dart';
 import '../../../../shared/widgets/charts/app_line_chart.dart';
 import '../../data/models/analytics_models.dart';
-import '../../domain/analytics_period.dart';
 import '../providers/analytics_provider.dart';
 
 enum _TimePeriod { oneMonth, threeMonths, sixMonths, oneYear, all }
@@ -177,7 +176,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                     style: const TextStyle(
                         color: Colors.white, fontSize: 12),
                   ),
-                  backgroundColor: AppTheme.neonGreen.withOpacity(0.2),
+                  backgroundColor: AppTheme.neonGreen.withValues(alpha: 0.2),
                   side: BorderSide.none,
                 ),
               const Spacer(),
@@ -189,7 +188,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                     width: 60,
                     height: 60,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
                   ),
                 ),
             ],
@@ -249,24 +248,19 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
             SizedBox(
               height: 280,
               child: AppLineChart(
-                spots: _filteredData.asMap().entries.map((entry) {
+                dataPoints: _filteredData.asMap().entries.map((entry) {
                   return FlSpot(
                     entry.key.toDouble(),
                     entry.value.estimated1Rm,
                   );
                 }).toList(),
-                dotColor: AppTheme.neonGreen,
-                lineColor: AppTheme.neonGreen.withOpacity(0.7),
-                gradientColors: const [
-                  AppTheme.neonGreen,
-                  AppTheme.neonGreen,
-                ],
-                xLabels: _filteredData
-                    .map(
-                      (d) => DateFormat('MMM d').format(d.date),
-                    )
-                    .toList(),
+                xFormatter: (val) {
+                  final index = val.toInt();
+                  if (index < 0 || index >= _filteredData.length) return '';
+                  return DateFormat('MMM d').format(_filteredData[index].date);
+                },
                 yFormatter: (val) => '${val.toStringAsFixed(0)} kg',
+                lineColor: AppTheme.neonGreen.withValues(alpha: 0.7),
               ),
             )
           else

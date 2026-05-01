@@ -8,6 +8,7 @@ import '../models/routine_models.dart';
 /// Implementa [IRoutineRepository] para inversión de dependencias
 /// desde [RoutineProvider].
 class RoutineDatasource implements IRoutineRepository {
+  @override
   Future<List<RoutineModel>> getRoutines() async {
     final response = await ApiClient.get('/api/routines');
     if (response.statusCode == 200) {
@@ -19,6 +20,7 @@ class RoutineDatasource implements IRoutineRepository {
     throw Exception('Error al obtener rutinas: ${response.statusCode}');
   }
 
+  @override
   Future<RoutineModel> createRoutine({
     required String name,
     String? description,
@@ -39,6 +41,7 @@ class RoutineDatasource implements IRoutineRepository {
     throw Exception('Error al crear rutina: ${response.statusCode}');
   }
 
+  @override
   Future<RoutineModel> updateRoutine({
     required int id,
     required String name,
@@ -60,6 +63,7 @@ class RoutineDatasource implements IRoutineRepository {
     throw Exception('Error al actualizar rutina: ${response.statusCode}');
   }
 
+  @override
   Future<void> deleteRoutine(int id) async {
     final response = await ApiClient.delete('/api/routines/$id');
     if (response.statusCode != 200 && response.statusCode != 204) {

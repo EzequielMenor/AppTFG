@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../features/analytics/data/models/analytics_models.dart';
-import '../providers/analytics_provider.dart' as analytics_providers;
+import '../../../analytics/presentation/providers/analytics_provider.dart' as analytics_providers;
 import '../providers/routine_provider.dart';
 import '../../data/models/routine_models.dart';
 

@@ -35,8 +35,8 @@ class AnalyticsDatasource {
       'page': page.toString(),
       'size': size.toString(),
       if (name != null && name.isNotEmpty) 'name': name,
-      if (muscleGroup != null) 'muscleGroup': muscleGroup,
-      if (equipment != null) 'equipment': equipment,
+      'muscleGroup': ?muscleGroup,
+      'equipment': ?equipment,
     };
     final response = await ApiClient.get('/api/exercises', queryParams: params);
     if (response.statusCode != 200) {

@@ -41,7 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             hintStyle: const TextStyle(color: AppTheme.textGrey),
             enabledBorder: UnderlineInputBorder(
               borderSide: BorderSide(
-                color: AppTheme.neonGreen.withOpacity(0.5),
+                color: AppTheme.neonGreen.withValues(alpha: 0.5),
               ),
             ),
             focusedBorder: const UnderlineInputBorder(
@@ -69,6 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (result != null && result.isNotEmpty) {
+      if (!mounted) return;
       await context.read<ProfileProvider>().updateDisplayName(result);
     }
   }
@@ -84,6 +85,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (result == null || result.files.single.path == null) return;
 
+    if (!mounted) return;
     await context.read<ProfileProvider>().importCsv(result.files.single.path!);
   }
 
@@ -121,6 +123,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (confirmed != true) return;
 
+    if (!mounted) return;
     await context.read<ProfileProvider>().clearData();
   }
 

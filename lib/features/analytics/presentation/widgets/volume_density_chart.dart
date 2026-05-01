@@ -93,7 +93,7 @@ class VolumeDensityChart extends StatelessWidget {
   Widget _changeBadge(bool isPositive) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (isPositive ? AppTheme.neonGreen : Colors.redAccent).withOpacity(0.15),
+          color: (isPositive ? AppTheme.neonGreen : Colors.redAccent).withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(

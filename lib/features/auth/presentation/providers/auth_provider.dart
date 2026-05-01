@@ -73,13 +73,13 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _handleError(Object e) {
-    print("================================");
-    print("💥💥 ERROR SUPABASE: $e");
-    print("================================");
+    debugPrint('=' * 40);
+    debugPrint('💥💥 ERROR SUPABASE: $e');
+    debugPrint('=' * 40);
     if (e is AuthException) {
       _errorMessage = e.message; // Mensaje traducido de Supabase
     } else {
-      _errorMessage = "Ha ocurrido un error inesperado. Revisa tu conexión.";
+      _errorMessage = 'Ha ocurrido un error inesperado. Revisa tu conexión.';
     }
     notifyListeners();
   }

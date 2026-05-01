@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../../data/datasources/routine_datasource.dart';
 import '../../data/models/routine_models.dart';
