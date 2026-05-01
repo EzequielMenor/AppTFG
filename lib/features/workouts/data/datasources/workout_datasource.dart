@@ -1,10 +1,17 @@
 import 'dart:convert';
 import '../../../../core/network/api_client.dart';
+import '../../domain/workout_repository.dart';
+import '../../domain/workout_tracker_repository.dart';
 import '../models/workout_models.dart';
 
 /// Centraliza las llamadas HTTP relacionadas con workouts.
+///
+/// Implementa [IWorkoutRepository] (lectura/borrado) e
+/// [IWorkoutTrackerRepository] (creación/actualización) para
+/// inversión de dependencias desde los providers.
+///
 /// Sigue el patrón de [RoutineDatasource] y [AnalyticsDatasource].
-class WorkoutDatasource {
+class WorkoutDatasource implements IWorkoutRepository, IWorkoutTrackerRepository {
   Future<List<WorkoutModel>> getWorkouts({int page = 0, int size = 20}) async {
     final response = await ApiClient.get(
       '/api/workouts',

@@ -1,8 +1,13 @@
 import 'dart:convert';
 import '../../../../core/network/api_client.dart';
+import '../../domain/routine_repository.dart';
 import '../models/routine_models.dart';
 
-class RoutineDatasource {
+/// Centraliza las llamadas HTTP relacionadas con rutinas.
+///
+/// Implementa [IRoutineRepository] para inversión de dependencias
+/// desde [RoutineProvider].
+class RoutineDatasource implements IRoutineRepository {
   Future<List<RoutineModel>> getRoutines() async {
     final response = await ApiClient.get('/api/routines');
     if (response.statusCode == 200) {

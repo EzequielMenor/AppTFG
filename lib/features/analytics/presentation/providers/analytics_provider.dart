@@ -30,6 +30,7 @@ class AnalyticsProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isUsingStaleData => _isUsingStaleData;
+  bool get hasLoadedOnce => _hasLoadedOnce;
 
   // Datos de analíticas
   AnalyticsSummaryModel? _summary;

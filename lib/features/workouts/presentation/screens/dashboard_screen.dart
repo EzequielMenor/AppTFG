@@ -1,12 +1,11 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/charts/app_bar_chart.dart';
-import '../../../analytics/data/datasources/analytics_datasource.dart';
 import '../../../analytics/data/models/analytics_models.dart';
+import '../../../analytics/presentation/providers/analytics_provider.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -17,83 +16,42 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final _ds = AnalyticsDatasource();
-
-  AnalyticsSummaryModel? _summary;
-  List<WeeklyVolumeModel> _weeklyVolume = [];
-  List<RecentPrModel> _recentPrs = [];
-  int _currentStreak = 0;
-
-  bool _loading = true;
-  String? _error;
-
   @override
   void initState() {
     super.initState();
-    _loadAll();
-  }
-
-  Future<void> _loadAll() async {
-    setState(() {
-      _loading = true;
-      _error = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AnalyticsProvider>().loadInitial();
     });
-    try {
-      final now = DateTime.now();
-      final allTimeFrom = DateTime(2020, 1, 1);
-      final eightWeeksAgo = now.subtract(const Duration(days: 56));
-      final thirtyDaysAgo = now.subtract(const Duration(days: 30));
-
-      final results = await Future.wait([
-        _ds.getSummary(allTimeFrom, now),
-        _ds.getWeeklyVolume(eightWeeksAgo, now),
-        _ds.getRecentPRs(thirtyDaysAgo, now),
-        _ds.getTrainingDays(thirtyDaysAgo, now),
-      ]);
-
-      if (!mounted) return;
-      setState(() {
-        _summary = results[0] as AnalyticsSummaryModel;
-        _weeklyVolume = results[1] as List<WeeklyVolumeModel>;
-        _recentPrs = (results[2] as List<RecentPrModel>).take(3).toList();
-        _currentStreak = (results[3] as ConsistencyModel).currentStreak;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
     final username = _extractUsername(user?.email);
+    final provider = context.watch<AnalyticsProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       body: SafeArea(
-        child: _loading
+        child: provider.isLoading && !provider.hasLoadedOnce
             ? const Center(
-                child: CircularProgressIndicator(color: AppTheme.neonGreen))
-            : _error != null
-                ? _buildError()
+                child: CircularProgressIndicator(color: AppTheme.neonGreen),
+              )
+            : provider.error != null && !provider.hasLoadedOnce
+                ? _buildError(provider)
                 : RefreshIndicator(
                     color: AppTheme.neonGreen,
-                    onRefresh: _loadAll,
+                    onRefresh: provider.forceRefresh,
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                       children: [
                         _buildHeader(username),
                         const SizedBox(height: 28),
-                        _buildKpiRow(),
+                        _buildKpiRow(provider),
                         const SizedBox(height: 28),
-                        _buildWeeklyChart(),
+                        _buildWeeklyChart(provider),
                         const SizedBox(height: 28),
-                        _buildRecentPRs(),
+                        _buildRecentPRs(provider),
                       ],
                     ),
                   ),
@@ -148,9 +106,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ── KPI Row ─────────────────────────────────────────────────────────────────
 
-  Widget _buildKpiRow() {
-    final workouts = _summary?.sessionCount ?? 0;
-    final volume = _summary?.totalVolume ?? 0;
+  Widget _buildKpiRow(AnalyticsProvider provider) {
+    final workouts = provider.summary?.sessionCount ?? 0;
+    final volume = provider.summary?.totalVolume ?? 0;
+    final streak = provider.consistency?.currentStreak ?? 0;
 
     return Row(
       children: [
@@ -159,18 +118,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _KpiCard(label: 'VOLUME', value: _formatVolume(volume)),
         const SizedBox(width: 10),
         _KpiCard(
-            label: 'STREAK',
-            value: '${_currentStreak}d',
-            valueColor: _currentStreak > 0 ? AppTheme.neonGreen : null),
+          label: 'STREAK',
+          value: '${streak}d',
+          valueColor: streak > 0 ? AppTheme.neonGreen : null,
+        ),
       ],
     );
   }
 
   // ── Weekly Activity Chart ────────────────────────────────────────────────────
 
-  Widget _buildWeeklyChart() {
-    final values = _weeklyVolume.map((w) => w.totalVolume).toList();
-    final labels = _weeklyVolume
+  Widget _buildWeeklyChart(AnalyticsProvider provider) {
+    final values = provider.weeklyVolume.map((w) => w.totalVolume).toList();
+    final labels = provider.weeklyVolume
         .map((w) => DateFormat('d/M').format(w.weekStart))
         .toList();
 
@@ -194,7 +154,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ── Recent PRs ──────────────────────────────────────────────────────────────
 
-  Widget _buildRecentPRs() {
+  Widget _buildRecentPRs(AnalyticsProvider provider) {
+    final prs = provider.recentPRs.take(3).toList();
+
     return _SectionCard(
       title: 'Recent PRs',
       trailing: TextButton(
@@ -202,7 +164,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: const Text('Ver historial',
             style: TextStyle(color: AppTheme.neonGreen, fontSize: 13)),
       ),
-      child: _recentPrs.isEmpty
+      child: prs.isEmpty
           ? const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
@@ -210,17 +172,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(color: AppTheme.textGrey)),
               ),
             )
-          : Column(
-              children: _recentPrs
-                  .map((pr) => _PrTile(pr: pr))
-                  .toList(),
-            ),
+          : Column(children: prs.map((pr) => _PrTile(pr: pr)).toList()),
     );
   }
 
   // ── Error ────────────────────────────────────────────────────────────────────
 
-  Widget _buildError() {
+  Widget _buildError(AnalyticsProvider provider) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -233,12 +191,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: TextStyle(color: Colors.white, fontSize: 16),
                 textAlign: TextAlign.center),
             const SizedBox(height: 8),
-            Text(_error ?? '',
-                style: const TextStyle(color: Colors.white38, fontSize: 12),
-                textAlign: TextAlign.center),
+            Text(
+              provider.error ?? '',
+              style: const TextStyle(color: Colors.white38, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: _loadAll,
+              onPressed: () => provider.forceRefresh(),
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.neonGreen,
                   foregroundColor: Colors.black),

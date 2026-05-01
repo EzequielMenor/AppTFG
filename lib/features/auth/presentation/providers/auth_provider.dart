@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/auth_repository.dart';
+import '../../data/models/user_model.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _repository = AuthRepository();
 
-  User? _user;
+  UserModel? _user;
   bool _isLoading = false;
   String? _errorMessage;
 
-  User? get user => _user;
+  UserModel? get user => _user;
   bool get isAuthenticated => _user != null;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -18,10 +19,13 @@ class AuthProvider extends ChangeNotifier {
     _init();
   }
 
-  // Inicializar estado escuchando a Supabase
+  // Inicializar estado escuchando a Supabase y mapeando a UserModel
   void _init() {
     _repository.authStateChanges.listen((data) {
-      _user = data.session?.user;
+      final supabaseUser = data.session?.user;
+      _user = supabaseUser != null
+          ? UserModel.fromSupabaseUser(supabaseUser)
+          : null;
       notifyListeners();
     });
   }

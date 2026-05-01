@@ -1,10 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 
-import '../../../../core/cache/cache_manager.dart';
-import '../../../../core/network/api_client.dart';
-import '../../../../core/settings/settings_manager.dart';
+import '../../data/datasources/profile_datasource.dart';
 
 /// ChangeNotifier que centraliza el estado del perfil: preferencias, importación
 /// y gestión de datos.
@@ -12,9 +9,14 @@ import '../../../../core/settings/settings_manager.dart';
 /// Sigue el patrón de [AuthProvider]: inyección simple, helpers privados
 /// `_setLoading`/`_clearStatus`, `notifyListeners()`.
 ///
-/// Reemplaza el estado local + llamadas directas a [SettingsManager],
-/// [ApiClient] y [CacheManager] en [ProfileScreen] y [CsvImportSheet].
+/// Delega el acceso a datos en [ProfileDatasource], que encapsula
+/// [SettingsManager], [ApiClient] y [CacheManager].
 class ProfileProvider extends ChangeNotifier {
+  final ProfileDatasource _datasource;
+
+  ProfileProvider({ProfileDatasource? datasource})
+    : _datasource = datasource ?? ProfileDatasource();
+
   // ── Estado ───────────────────────────────────────────────────────────────
 
   String? _displayName;
@@ -35,10 +37,10 @@ class ProfileProvider extends ChangeNotifier {
 
   // ── Inicialización ──────────────────────────────────────────────────────
 
-  /// Carga las preferencias guardadas.
+  /// Carga las preferencias guardadas desde el datasource.
   Future<void> loadProfile() async {
-    final name = await SettingsManager.getDisplayName();
-    final unit = await SettingsManager.getWeightUnit();
+    final name = await _datasource.getDisplayName();
+    final unit = await _datasource.getWeightUnit();
     _displayName = name;
     _weightUnit = unit;
     notifyListeners();
@@ -56,53 +58,36 @@ class ProfileProvider extends ChangeNotifier {
 
   /// Actualiza el nombre de usuario.
   Future<void> updateDisplayName(String name) async {
-    await SettingsManager.setDisplayName(name);
+    await _datasource.setDisplayName(name);
     _displayName = name;
     notifyListeners();
   }
 
   /// Cambia la unidad de peso.
   Future<void> setWeightUnit(String unit) async {
-    await SettingsManager.setWeightUnit(unit);
+    await _datasource.setWeightUnit(unit);
     _weightUnit = unit;
     notifyListeners();
   }
 
   // ── Importación CSV (Hevy) ──────────────────────────────────────────────
 
-  /// Importa un archivo CSV desde Hevy via multipart upload.
+  /// Importa un archivo CSV desde Hevy via el datasource.
   Future<void> importCsv(String filePath) async {
     _isImporting = true;
     _clearStatus();
     notifyListeners();
 
     try {
-      final response = await ApiClient.postMultipart(
-        '/api/import/hevy',
-        filePath: filePath,
-        fieldName: 'file',
-      );
+      final result = await _datasource.importCsv(filePath);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final body = json.decode(response.body);
-        final int success = body['successCount'] ?? 0;
-        final int failed = body['failedCount'] ?? 0;
-        final List<dynamic> failedRowsRaw = body['failedRows'] ?? [];
-        final int failedRowsCount = failedRowsRaw.length;
-        final String failedPreview = failedRowsRaw
-            .take(3)
-            .map((e) => e.toString())
-            .join('\n');
-
-        _isSuccess = success > 0;
-        _statusMessage = success > 0
-            ? 'Importadas $success series correctamente. Fallos: $failed (detalles: $failedRowsCount)'
-                '${failedPreview.isNotEmpty ? '\n\nPrimeros fallos:\n$failedPreview' : ''}'
-            : 'Nada importado. $failed filas fallaron.';
-      } else {
-        _isSuccess = false;
-        _statusMessage = 'Error del servidor (${response.statusCode}).';
-      }
+      _isSuccess = result.isSuccess;
+      _statusMessage = result.isSuccess
+          ? 'Importadas ${result.successCount} series correctamente. '
+                'Fallos: ${result.failedCount} '
+                '(detalles: ${result.failedRowsCount})'
+                '${result.failedPreview != null && result.failedPreview!.isNotEmpty ? '\n\nPrimeros fallos:\n${result.failedPreview}' : ''}'
+          : 'Nada importado. ${result.failedCount} filas fallaron.';
     } catch (e) {
       _isSuccess = false;
       _statusMessage = 'Error: $e';
@@ -114,22 +99,16 @@ class ProfileProvider extends ChangeNotifier {
 
   // ── Borrar datos ────────────────────────────────────────────────────────
 
-  /// Borra todos los entrenamientos y la caché local.
+  /// Borra todos los entrenamientos y la caché local via el datasource.
   Future<void> clearData() async {
     _isClearing = true;
     _clearStatus();
     notifyListeners();
 
     try {
-      final response = await ApiClient.delete('/api/workouts');
-      if (response.statusCode == 200) {
-        await CacheManager.clearAllCache();
-        _isSuccess = true;
-        _statusMessage = 'Todos los entrenamientos han sido borrados.';
-      } else {
-        _isSuccess = false;
-        _statusMessage = 'Error del servidor (${response.statusCode}).';
-      }
+      await _datasource.clearData();
+      _isSuccess = true;
+      _statusMessage = 'Todos los entrenamientos han sido borrados.';
     } catch (e) {
       _isSuccess = false;
       _statusMessage = 'Error: $e';

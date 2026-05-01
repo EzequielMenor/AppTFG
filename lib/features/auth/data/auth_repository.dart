@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../domain/auth_repository.dart';
 
-class AuthRepository {
+class AuthRepository implements IAuthRepository {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   // Hacer login con email y password
