@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../data/models/analytics_models.dart';
+import '../../domain/analytics_repository.dart';
 import '../providers/analytics_provider.dart';
+import '../providers/exercise_detail_provider.dart';
 import 'exercise_detail_screen.dart';
 
 class ExerciseSearchScreen extends StatefulWidget {
@@ -249,12 +251,17 @@ class _ExerciseSearchScreenState extends State<ExerciseSearchScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ExerciseDetailScreen(
-                                exerciseId: ex.id,
-                                exerciseName: ex.name,
-                                muscleGroup: ex.muscleGroup,
-                                thumbnailUrl: ex.thumbnailUrl,
-                                videoUrl: ex.videoUrl,
+                              builder: (_) => ChangeNotifierProvider(
+                                create: (ctx) => ExerciseDetailProvider(
+                                  repository: ctx.read<IAnalyticsRepository>(),
+                                )..loadProgression(ex.id),
+                                child: ExerciseDetailScreen(
+                                  exerciseId: ex.id,
+                                  exerciseName: ex.name,
+                                  muscleGroup: ex.muscleGroup,
+                                  thumbnailUrl: ex.thumbnailUrl,
+                                  videoUrl: ex.videoUrl,
+                                ),
                               ),
                             ),
                           );

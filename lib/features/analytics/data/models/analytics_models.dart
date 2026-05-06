@@ -96,6 +96,11 @@ class AnalyticsSummaryModel {
         sessionCount: (json['sessionCount'] as num? ?? 0).toInt(),
         totalVolume: (json['totalVolume'] as num? ?? 0).toDouble(),
       );
+
+  Map<String, dynamic> toJson() => {
+        'sessionCount': sessionCount,
+        'totalVolume': totalVolume,
+      };
 }
 
 class RecentPrModel {
@@ -115,6 +120,12 @@ class RecentPrModel {
         .toDouble(),
     date: DateTime.parse(json['date'] as String),
   );
+
+  Map<String, dynamic> toJson() => {
+        'exerciseName': exerciseName,
+        'maxWeight': maxWeight,
+        'date': date.toIso8601String(),
+      };
 }
 
 class TopExerciseModel {
@@ -134,6 +145,12 @@ class TopExerciseModel {
         exerciseName: json['exerciseName'] as String,
         best1Rm: (json['best1Rm'] as num).toDouble(),
       );
+
+  Map<String, dynamic> toJson() => {
+        'rank': rank,
+        'exerciseName': exerciseName,
+        'best1Rm': best1Rm,
+      };
 }
 
 class WeeklyVolumeModel {
@@ -147,6 +164,11 @@ class WeeklyVolumeModel {
         weekStart: DateTime.parse(json['weekStart'] as String),
         totalVolume: (json['totalVolume'] as num? ?? 0).toDouble(),
       );
+
+  Map<String, dynamic> toJson() => {
+        'weekStart': weekStart.toIso8601String(),
+        'totalVolume': totalVolume,
+      };
 }
 
 class MuscleDistributionModel {
@@ -233,6 +255,12 @@ class VolumeDensityModel {
         previousDensity: (json['previousDensity'] as num? ?? 0).toDouble(),
         changePercent: (json['changePercent'] as num? ?? 0).toDouble(),
       );
+
+  Map<String, dynamic> toJson() => {
+        'currentDensity': currentDensity,
+        'previousDensity': previousDensity,
+        'changePercent': changePercent,
+      };
 }
 
 class TrainingStyleModel {
@@ -268,6 +296,10 @@ class WeeklyRhythmModel {
         List.filled(7, 0);
     return WeeklyRhythmModel(sessionsByDayOfWeek: raw);
   }
+
+  Map<String, dynamic> toJson() => {
+        'sessionsByDayOfWeek': sessionsByDayOfWeek,
+      };
 }
 
 // ── EZE-169 model ─────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../data/datasources/profile_datasource.dart';
+import '../../domain/profile_repository.dart';
 
 /// ChangeNotifier que centraliza el estado del perfil: preferencias, importación
 /// y gestión de datos.
@@ -8,13 +8,13 @@ import '../../data/datasources/profile_datasource.dart';
 /// Sigue el patrón de [AuthProvider]: inyección simple, helpers privados
 /// `_setLoading`/`_clearStatus`, `notifyListeners()`.
 ///
-/// Delega el acceso a datos en [ProfileDatasource], que encapsula
+/// Delega el acceso a datos en [IProfileRepository], que encapsula
 /// [SettingsManager], [ApiClient] y [CacheManager].
 class ProfileProvider extends ChangeNotifier {
-  final ProfileDatasource _datasource;
+  final IProfileRepository _repository;
 
-  ProfileProvider({ProfileDatasource? datasource})
-    : _datasource = datasource ?? ProfileDatasource();
+  ProfileProvider({required IProfileRepository repository})
+      : _repository = repository;
 
   // ── Estado ───────────────────────────────────────────────────────────────
 
@@ -36,10 +36,10 @@ class ProfileProvider extends ChangeNotifier {
 
   // ── Inicialización ──────────────────────────────────────────────────────
 
-  /// Carga las preferencias guardadas desde el datasource.
+  /// Carga las preferencias guardadas desde el repositorio.
   Future<void> loadProfile() async {
-    final name = await _datasource.getDisplayName();
-    final unit = await _datasource.getWeightUnit();
+    final name = await _repository.getDisplayName();
+    final unit = await _repository.getWeightUnit();
     _displayName = name;
     _weightUnit = unit;
     notifyListeners();
@@ -57,28 +57,28 @@ class ProfileProvider extends ChangeNotifier {
 
   /// Actualiza el nombre de usuario.
   Future<void> updateDisplayName(String name) async {
-    await _datasource.setDisplayName(name);
+    await _repository.setDisplayName(name);
     _displayName = name;
     notifyListeners();
   }
 
   /// Cambia la unidad de peso.
   Future<void> setWeightUnit(String unit) async {
-    await _datasource.setWeightUnit(unit);
+    await _repository.setWeightUnit(unit);
     _weightUnit = unit;
     notifyListeners();
   }
 
   // ── Importación CSV (Hevy) ──────────────────────────────────────────────
 
-  /// Importa un archivo CSV desde Hevy via el datasource.
+  /// Importa un archivo CSV desde Hevy via el repositorio.
   Future<void> importCsv(String filePath) async {
     _isImporting = true;
     _clearStatus();
     notifyListeners();
 
     try {
-      final result = await _datasource.importCsv(filePath);
+      final result = await _repository.importCsv(filePath);
 
       _isSuccess = result.isSuccess;
       _statusMessage = result.isSuccess
@@ -98,14 +98,14 @@ class ProfileProvider extends ChangeNotifier {
 
   // ── Borrar datos ────────────────────────────────────────────────────────
 
-  /// Borra todos los entrenamientos y la caché local via el datasource.
+  /// Borra todos los entrenamientos y la caché local via el repositorio.
   Future<void> clearData() async {
     _isClearing = true;
     _clearStatus();
     notifyListeners();
 
     try {
-      await _datasource.clearData();
+      await _repository.clearData();
       _isSuccess = true;
       _statusMessage = 'Todos los entrenamientos han sido borrados.';
     } catch (e) {

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/cache/cache_manager.dart';
-import '../../data/datasources/analytics_datasource.dart';
 import '../../data/models/analytics_models.dart';
 import '../../domain/analytics_period.dart';
+import '../../domain/analytics_repository.dart';
 
 /// ChangeNotifier que centraliza el estado de analíticas con SWR cache.
 ///
@@ -12,10 +12,10 @@ import '../../domain/analytics_period.dart';
 ///
 /// Reemplaza el state + lógica SWR que actualmente vive en [AnalyticsScreen].
 class AnalyticsProvider extends ChangeNotifier {
-  final AnalyticsDatasource _datasource;
+  final IAnalyticsRepository _repository;
 
-  AnalyticsProvider({AnalyticsDatasource? datasource})
-      : _datasource = datasource ?? AnalyticsDatasource();
+  AnalyticsProvider({required IAnalyticsRepository repository})
+      : _repository = repository;
 
   // ── Estado público ───────────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ class AnalyticsProvider extends ChangeNotifier {
 
   /// Obtiene todos los ejercicios disponibles.
   Future<List<ExerciseModel>> getExercises() =>
-      _datasource.getExercises();
+      _repository.getExercises();
 
   /// Busca ejercicios con filtros.
   Future<List<ExerciseModel>> getExercisesFiltered({
@@ -87,7 +87,7 @@ class AnalyticsProvider extends ChangeNotifier {
     int page = 0,
     int size = 20,
   }) =>
-      _datasource.getExercisesFiltered(
+      _repository.getExercisesFiltered(
         name: name,
         muscleGroup: muscleGroup,
         equipment: equipment,
@@ -97,7 +97,7 @@ class AnalyticsProvider extends ChangeNotifier {
 
   /// Obtiene la progresión 1RM de un ejercicio.
   Future<List<Progression1RMModel>> get1RMProgression(int exerciseId) =>
-      _datasource.get1RMProgression(exerciseId);
+      _repository.get1RMProgression(exerciseId);
 
   /// Fuerza refresco ignorando cache (pull-to-refresh).
   Future<void> forceRefresh() async {
@@ -140,17 +140,17 @@ class AnalyticsProvider extends ChangeNotifier {
 
     try {
       final results = await Future.wait([
-        _datasource.getSummary(range.from, range.to),
-        _datasource.getRecentPRs(range.from, range.to),
-        _datasource.getTopExercises(limit: 5),
-        _datasource.getWeeklyVolume(range.from, range.to),
-        _datasource.getWeeklyVolume(prevFrom, prevTo),
-        _datasource.getMuscleDistribution(range.from, range.to),
-        _datasource.getTrainingDays(range.from, range.to),
-        _datasource.getDurationStats(range.from, range.to),
-        _datasource.getVolumeDensity(),
-        _datasource.getTrainingStyle(range.from, range.to),
-        _datasource.getWeeklyRhythm(),
+        _repository.getSummary(range.from, range.to),
+        _repository.getRecentPRs(range.from, range.to),
+        _repository.getTopExercises(limit: 5),
+        _repository.getWeeklyVolume(range.from, range.to),
+        _repository.getWeeklyVolume(prevFrom, prevTo),
+        _repository.getMuscleDistribution(range.from, range.to),
+        _repository.getTrainingDays(range.from, range.to),
+        _repository.getDurationStats(range.from, range.to),
+        _repository.getVolumeDensity(),
+        _repository.getTrainingStyle(range.from, range.to),
+        _repository.getWeeklyRhythm(),
       ]);
 
       _summary = results[0] as AnalyticsSummaryModel;
@@ -194,43 +194,22 @@ class AnalyticsProvider extends ChangeNotifier {
     final prevTo = range.from;
 
     try {
-      final summary = await _cachedOrFallback(
-        () => _datasource.getSummaryCached(range.from, range.to),
-        () => _datasource.getSummary(range.from, range.to),
-      );
-      final recentPRs = await _cachedOrFallback(
-        () => _datasource.getRecentPRsCached(range.from, range.to),
-        () => _datasource.getRecentPRs(range.from, range.to),
-      );
-      final topExercises = await _cachedOrFallback(
-        () => _datasource.getTopExercisesCached(limit: 5),
-        () => _datasource.getTopExercises(limit: 5),
-      );
-      final weeklyVolume = await _cachedOrFallback(
-        () => _datasource.getWeeklyVolumeCached(range.from, range.to),
-        () => _datasource.getWeeklyVolume(range.from, range.to),
-      );
-      final previousWeeklyVolume = await _cachedOrFallback(
-        () => _datasource.getWeeklyVolumeCached(prevFrom, prevTo),
-        () => _datasource.getWeeklyVolume(prevFrom, prevTo),
-      );
-      final volumeDensity = await _cachedOrFallback(
-        () => _datasource.getVolumeDensityCached(),
-        () => _datasource.getVolumeDensity(),
-      );
-      final weeklyRhythm = await _cachedOrFallback(
-        () => _datasource.getWeeklyRhythmCached(),
-        () => _datasource.getWeeklyRhythm(),
-      );
+      final summary = await _repository.getSummary(range.from, range.to);
+      final recentPRs = await _repository.getRecentPRs(range.from, range.to);
+      final topExercises = await _repository.getTopExercises(limit: 5);
+      final weeklyVolume = await _repository.getWeeklyVolume(range.from, range.to);
+      final previousWeeklyVolume = await _repository.getWeeklyVolume(prevFrom, prevTo);
+      final volumeDensity = await _repository.getVolumeDensity();
+      final weeklyRhythm = await _repository.getWeeklyRhythm();
 
       final muscleDistribution =
-          await _datasource.getMuscleDistribution(range.from, range.to);
+          await _repository.getMuscleDistribution(range.from, range.to);
       final consistency =
-          await _datasource.getTrainingDays(range.from, range.to);
+          await _repository.getTrainingDays(range.from, range.to);
       final durationStats =
-          await _datasource.getDurationStats(range.from, range.to);
+          await _repository.getDurationStats(range.from, range.to);
       final trainingStyle =
-          await _datasource.getTrainingStyle(range.from, range.to);
+          await _repository.getTrainingStyle(range.from, range.to);
 
       _summary = summary;
       _recentPRs = recentPRs;
@@ -251,19 +230,6 @@ class AnalyticsProvider extends ChangeNotifier {
     } catch (e, st) {
       debugPrint('[AnalyticsProvider] Cache load error: $e\n$st');
       _handleError(e);
-    }
-  }
-
-  /// Intenta método cached; si falla, cae al método original.
-  Future<T> _cachedOrFallback<T>(
-    Future<T> Function() cachedFn,
-    Future<T> Function() fallbackFn,
-  ) async {
-    try {
-      return await cachedFn();
-    } catch (e) {
-      debugPrint('[AnalyticsProvider] Cached failed, using fallback: $e');
-      return await fallbackFn();
     }
   }
 

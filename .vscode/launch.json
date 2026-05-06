@@ -23,7 +23,7 @@
       "type": "dart",
       "flutterMode": "debug",
       "args": [
-        "--dart-define=BACKEND_URL=https://electrical-commons-consequently-join.trycloudflare.com"
+        "--dart-define=BACKEND_URL=https://mainstream-tour-surname-front.trycloudflare.com"
       ]
     },
     {

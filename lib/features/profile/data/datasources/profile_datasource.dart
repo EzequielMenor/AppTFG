@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../../../../core/cache/cache_manager.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/settings/settings_manager.dart';
+import '../../domain/entities/import_result.dart';
 
 /// Centraliza el acceso a datos del perfil: preferencias locales,
 /// importación de CSV desde Hevy y limpieza de datos.
@@ -10,6 +11,7 @@ import '../../../../core/settings/settings_manager.dart';
 /// [ProfileProvider] no dependa directamente de infraestructura.
 ///
 /// Sigue el mismo patrón que [AnalyticsDatasource] y [WorkoutDatasource].
+@Deprecated('Use IProfileRepository + ProfileRepositoryImpl')
 class ProfileDatasource {
   // ── Preferencias locales (SharedPreferences vía SettingsManager) ────────
 
@@ -70,19 +72,4 @@ class ProfileDatasource {
   }
 }
 
-/// Resultado de una importación CSV.
-class ImportResult {
-  final bool isSuccess;
-  final int successCount;
-  final int failedCount;
-  final int failedRowsCount;
-  final String? failedPreview;
 
-  const ImportResult({
-    required this.isSuccess,
-    required this.successCount,
-    required this.failedCount,
-    required this.failedRowsCount,
-    this.failedPreview,
-  });
-}

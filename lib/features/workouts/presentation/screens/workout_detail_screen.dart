@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../analytics/domain/analytics_repository.dart';
+import '../../../analytics/presentation/providers/exercise_detail_provider.dart';
 import '../../../analytics/presentation/screens/exercise_detail_screen.dart';
 import '../../data/models/workout_models.dart';
 import '../providers/workout_provider.dart';
@@ -299,12 +301,17 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ExerciseDetailScreen(
-            exerciseId: exercise.exerciseId,
-            exerciseName: exercise.exerciseName,
-            muscleGroup: exercise.muscleGroup,
-            videoUrl: exercise.videoUrl,
-            thumbnailUrl: exercise.thumbnailUrl,
+          builder: (_) => ChangeNotifierProvider(
+            create: (ctx) => ExerciseDetailProvider(
+              repository: ctx.read<IAnalyticsRepository>(),
+            )..loadProgression(exercise.exerciseId),
+            child: ExerciseDetailScreen(
+              exerciseId: exercise.exerciseId,
+              exerciseName: exercise.exerciseName,
+              muscleGroup: exercise.muscleGroup,
+              videoUrl: exercise.videoUrl,
+              thumbnailUrl: exercise.thumbnailUrl,
+            ),
           ),
         ),
       );
