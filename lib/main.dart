@@ -3,6 +3,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'app.dart';
+import 'core/cache/cache_manager.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/analytics/presentation/providers/analytics_provider.dart';
 import 'features/workouts/presentation/providers/workout_provider.dart';
@@ -28,6 +29,9 @@ Future<void> main() async {
     anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpZ2dvYWp0b211d3RiYXJqdHZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxNDExODUsImV4cCI6MjA4NTcxNzE4NX0.SXg1cMSbqGHJ4fwSe5q9a_QQLQlYjsLcGLWLZauppbg',
   );
+
+  // Initialize Drift cache with SharedPreferences migration
+  await CacheManager.initialize();
 
   runApp(
     // Inyectamos el AuthProvider en la raíz de la app

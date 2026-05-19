@@ -11,9 +11,7 @@ class AnalyticsRepositoryImpl implements IAnalyticsRepository {
   final AnalyticsDatasource _remote;
 
   AnalyticsRepositoryImpl({required AnalyticsDatasource remote})
-      : _remote = remote;
-
-  // ── Sin cache ────────────────────────────────────────────────────────────
+    : _remote = remote;
 
   @override
   Future<List<ExerciseModel>> getExercises() => _remote.getExercises();
@@ -25,39 +23,19 @@ class AnalyticsRepositoryImpl implements IAnalyticsRepository {
     String? equipment,
     int page = 0,
     int size = 20,
-  }) =>
-      _remote.getExercisesFiltered(
-        name: name,
-        muscleGroup: muscleGroup,
-        equipment: equipment,
-        page: page,
-        size: size,
-      );
+  }) => _remote.getExercisesFiltered(
+    name: name,
+    muscleGroup: muscleGroup,
+    equipment: equipment,
+    page: page,
+    size: size,
+  );
 
   @override
   Future<List<Progression1RMModel>> get1RMProgression(int exerciseId) =>
       _remote.get1RMProgression(exerciseId);
 
-  @override
-  Future<List<MuscleDistributionModel>> getMuscleDistribution(
-    DateTime from,
-    DateTime to,
-  ) =>
-      _remote.getMuscleDistribution(from, to);
-
-  @override
-  Future<ConsistencyModel> getTrainingDays(DateTime from, DateTime to) =>
-      _remote.getTrainingDays(from, to);
-
-  @override
-  Future<DurationStatsModel> getDurationStats(DateTime from, DateTime to) =>
-      _remote.getDurationStats(from, to);
-
-  @override
-  Future<TrainingStyleModel> getTrainingStyle(DateTime from, DateTime to) =>
-      _remote.getTrainingStyle(from, to);
-
-  // ── Con cache — TTL 5 min ────────────────────────────────────────────────
+  // ── Period-dependent endpoints (con cache SWR) ───────────────────────────
 
   @override
   Future<AnalyticsSummaryModel> getSummary(DateTime from, DateTime to) {
@@ -66,12 +44,6 @@ class AnalyticsRepositoryImpl implements IAnalyticsRepository {
     return _swr<AnalyticsSummaryModel>(
       cacheKey: 'analytics_summary_${fromUtc}_$toUtc',
       fetch: () => _remote.getSummary(from, to),
-      fromJson: (j) =>
-          AnalyticsSummaryModel.fromJson(j as Map<String, dynamic>),
-      defaultValue: const AnalyticsSummaryModel(
-        sessionCount: 0,
-        totalVolume: 0,
-      ),
       ttl: const Duration(minutes: 5),
     );
   }
@@ -83,58 +55,84 @@ class AnalyticsRepositoryImpl implements IAnalyticsRepository {
     return _swr<List<RecentPrModel>>(
       cacheKey: 'analytics_recent_prs_${fromUtc}_$toUtc',
       fetch: () => _remote.getRecentPRs(from, to),
-      fromJson: (j) => (j as List<dynamic>)
-          .map((e) => RecentPrModel.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      defaultValue: const <RecentPrModel>[],
       ttl: const Duration(minutes: 5),
     );
   }
+
+  @override
+  Future<List<WeeklyVolumeModel>> getWeeklyVolume(DateTime from, DateTime to) {
+    final fromUtc = from.toUtc().toIso8601String();
+    final toUtc = to.toUtc().toIso8601String();
+    return _swr<List<WeeklyVolumeModel>>(
+      cacheKey: 'analytics_weekly_volume_${fromUtc}_$toUtc',
+      fetch: () => _remote.getWeeklyVolume(from, to),
+      ttl: const Duration(minutes: 5),
+    );
+  }
+
+  @override
+  Future<List<MuscleDistributionModel>> getMuscleDistribution(
+    DateTime from,
+    DateTime to,
+  ) {
+    final fromUtc = from.toUtc().toIso8601String();
+    final toUtc = to.toUtc().toIso8601String();
+    return _swr<List<MuscleDistributionModel>>(
+      cacheKey: 'analytics_muscle_distribution_${fromUtc}_$toUtc',
+      fetch: () => _remote.getMuscleDistribution(from, to),
+      ttl: const Duration(minutes: 5),
+    );
+  }
+
+  @override
+  Future<ConsistencyModel> getTrainingDays(DateTime from, DateTime to) {
+    final fromUtc = from.toUtc().toIso8601String();
+    final toUtc = to.toUtc().toIso8601String();
+    return _swr<ConsistencyModel>(
+      cacheKey: 'analytics_training_days_${fromUtc}_$toUtc',
+      fetch: () => _remote.getTrainingDays(from, to),
+      ttl: const Duration(minutes: 5),
+    );
+  }
+
+  @override
+  Future<DurationStatsModel> getDurationStats(DateTime from, DateTime to) {
+    final fromUtc = from.toUtc().toIso8601String();
+    final toUtc = to.toUtc().toIso8601String();
+    return _swr<DurationStatsModel>(
+      cacheKey: 'analytics_duration_stats_${fromUtc}_$toUtc',
+      fetch: () => _remote.getDurationStats(from, to),
+      ttl: const Duration(minutes: 5),
+    );
+  }
+
+  @override
+  Future<TrainingStyleModel> getTrainingStyle(DateTime from, DateTime to) {
+    final fromUtc = from.toUtc().toIso8601String();
+    final toUtc = to.toUtc().toIso8601String();
+    return _swr<TrainingStyleModel>(
+      cacheKey: 'analytics_training_style_${fromUtc}_$toUtc',
+      fetch: () => _remote.getTrainingStyle(from, to),
+      ttl: const Duration(minutes: 5),
+    );
+  }
+
+  // ── Global endpoints (con cache SWR, TTL mayor) ──────────────────────────
 
   @override
   Future<List<TopExerciseModel>> getTopExercises({int limit = 5}) {
     return _swr<List<TopExerciseModel>>(
       cacheKey: 'analytics_top_exercises_$limit',
       fetch: () => _remote.getTopExercises(limit: limit),
-      fromJson: (j) => (j as List<dynamic>)
-          .map((e) => TopExerciseModel.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      defaultValue: const <TopExerciseModel>[],
-      ttl: const Duration(minutes: 5),
+      ttl: const Duration(minutes: 30),
     );
   }
-
-  @override
-  Future<List<WeeklyVolumeModel>> getWeeklyVolume(
-    DateTime from,
-    DateTime to,
-  ) {
-    final fromUtc = from.toUtc().toIso8601String();
-    final toUtc = to.toUtc().toIso8601String();
-    return _swr<List<WeeklyVolumeModel>>(
-      cacheKey: 'analytics_weekly_volume_${fromUtc}_$toUtc',
-      fetch: () => _remote.getWeeklyVolume(from, to),
-      fromJson: (j) => (j as List<dynamic>)
-          .map((e) => WeeklyVolumeModel.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      defaultValue: const <WeeklyVolumeModel>[],
-      ttl: const Duration(minutes: 5),
-    );
-  }
-
-  // ── Con cache — TTL 30 min ───────────────────────────────────────────────
 
   @override
   Future<VolumeDensityModel> getVolumeDensity() {
     return _swr<VolumeDensityModel>(
       cacheKey: 'analytics_volume_density',
       fetch: () => _remote.getVolumeDensity(),
-      fromJson: (j) => VolumeDensityModel.fromJson(j as Map<String, dynamic>),
-      defaultValue: const VolumeDensityModel(
-        currentDensity: 0,
-        previousDensity: 0,
-        changePercent: 0,
-      ),
       ttl: const Duration(minutes: 30),
     );
   }
@@ -144,67 +142,96 @@ class AnalyticsRepositoryImpl implements IAnalyticsRepository {
     return _swr<WeeklyRhythmModel>(
       cacheKey: 'analytics_weekly_rhythm',
       fetch: () => _remote.getWeeklyRhythm(),
-      fromJson: (j) => WeeklyRhythmModel.fromJson(j as Map<String, dynamic>),
-      defaultValue: const WeeklyRhythmModel(
-        sessionsByDayOfWeek: [0, 0, 0, 0, 0, 0, 0],
-      ),
       ttl: const Duration(minutes: 30),
     );
   }
 
-  // ── Stale-While-Revalidate cache wrapper ─────────────────────────────
+  // ── SWR cache wrapper ────────────────────────────────────────────────────
 
-  /// Ejecuta una llamada API con caché SWR.
-  /// Si hay cache hit → devuelve datos cacheados inmediatamente + refresco en background.
-  /// Si cache miss → fetch síncrono, cachea y devuelve.
   Future<T> _swr<T>({
     required String cacheKey,
     required Future<T> Function() fetch,
-    required T Function(dynamic json) fromJson,
-    required T defaultValue,
     required Duration ttl,
   }) async {
-    // 1. Intentar leer del cache
-    final cached = await CacheManager.getCache(cacheKey);
-    if (cached != null) {
-      debugPrint('[AnalyticsSWR] Cache HIT: $cacheKey');
-      // Refresco en background sin bloquear
-      unawaited(
-        _fetchAndCache(
-          fetch,
-          defaultValue,
-          cacheKey,
-          ttl,
-        ).catchError((_) => defaultValue),
+    final cached = await CacheManager.getStale<dynamic>(cacheKey);
+    if (cached != null && cached.data != null) {
+      debugPrint(
+        cached.isExpired
+            ? '[AnalyticsRepo] Stale HIT: $cacheKey'
+            : '[AnalyticsRepo] Fresh HIT: $cacheKey',
       );
-      return fromJson(cached);
+      unawaited(
+        _fetchAndCache(fetch, cacheKey, ttl).then((_) {
+          debugPrint('[AnalyticsRepo] Background refresh done: $cacheKey');
+        }).catchError((e) {
+          debugPrint('[AnalyticsRepo] Background refresh failed: $cacheKey: $e');
+        }),
+      );
+      return _fromJson<T>(cached.data);
     }
 
-    // 2. Cache miss → fetch síncrono
-    debugPrint('[AnalyticsSWR] Cache MISS: $cacheKey');
-    return _fetchAndCache(
-      fetch,
-      defaultValue,
-      cacheKey,
-      ttl,
-    );
+    debugPrint('[AnalyticsRepo] Cache MISS: $cacheKey');
+    return _fetchAndCache(fetch, cacheKey, ttl);
   }
 
-  /// Fetch real + guardar en cache. Usado tanto para cache miss como para background refresh.
   Future<T> _fetchAndCache<T>(
     Future<T> Function() fetch,
-    T defaultValue,
     String cacheKey,
     Duration ttl,
   ) async {
     try {
       final data = await fetch();
-      // Guardar en cache con TTL
       await CacheManager.setCache(cacheKey, data, cacheDuration: ttl);
       return data;
     } catch (e) {
-      debugPrint('[AnalyticsSWR] Fetch error for $cacheKey: $e');
-      return defaultValue;
+      debugPrint('[AnalyticsRepo] Fetch error for $cacheKey: $e');
+      rethrow;
     }
+  }
+
+  T _fromJson<T>(dynamic data) {
+    if (T == AnalyticsSummaryModel) {
+      return AnalyticsSummaryModel.fromJson(
+        data as Map<String, dynamic>,
+      ) as T;
+    }
+    if (T == List<RecentPrModel>) {
+      return (data as List<dynamic>)
+          .map((e) => RecentPrModel.fromJson(e as Map<String, dynamic>))
+          .toList() as T;
+    }
+    if (T == List<TopExerciseModel>) {
+      return (data as List<dynamic>)
+          .map((e) => TopExerciseModel.fromJson(e as Map<String, dynamic>))
+          .toList() as T;
+    }
+    if (T == List<WeeklyVolumeModel>) {
+      return (data as List<dynamic>)
+          .map((e) => WeeklyVolumeModel.fromJson(e as Map<String, dynamic>))
+          .toList() as T;
+    }
+    if (T == List<MuscleDistributionModel>) {
+      return (data as List<dynamic>)
+          .map(
+            (e) => MuscleDistributionModel.fromJson(e as Map<String, dynamic>),
+          )
+          .toList() as T;
+    }
+    if (T == ConsistencyModel) {
+      return ConsistencyModel.fromJson(data as Map<String, dynamic>) as T;
+    }
+    if (T == DurationStatsModel) {
+      return DurationStatsModel.fromJson(data as Map<String, dynamic>) as T;
+    }
+    if (T == TrainingStyleModel) {
+      return TrainingStyleModel.fromJson(data as Map<String, dynamic>) as T;
+    }
+    if (T == VolumeDensityModel) {
+      return VolumeDensityModel.fromJson(data as Map<String, dynamic>) as T;
+    }
+    if (T == WeeklyRhythmModel) {
+      return WeeklyRhythmModel.fromJson(data as Map<String, dynamic>) as T;
+    }
+    throw Exception('Unknown type for _fromJson: $T');
   }
 }

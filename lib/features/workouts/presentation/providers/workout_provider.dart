@@ -1,18 +1,23 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint;
 
 import '../../../../core/cache/cache_manager.dart';
+import '../../../../core/network/cancel_token.dart';
 import '../../data/datasources/workout_datasource.dart';
 import '../../data/models/workout_models.dart';
 
 /// ChangeNotifier que centraliza el estado de workouts (historial + detalle).
 ///
-/// Sigue el patrón de SWR cache de [workout_history_screen]:
-/// muestra datos cacheados inmediatamente y refresca en background.
+/// Implementa el patrón SWR (Stale-While-Revalidate):
+/// - Muestra datos cacheados inmediatamente si existen
+/// - Refresca en background sin bloquear la UI
+/// - Mantiene datos stale cuando el backend falla
+/// - NO limpia caché al hacer refresh (mantiene snapshot disponible)
 class WorkoutProvider extends ChangeNotifier {
   final WorkoutDatasource _datasource;
+  CancelToken? _cancelToken;
 
   WorkoutProvider({WorkoutDatasource? datasource})
-      : _datasource = datasource ?? WorkoutDatasource();
+    : _datasource = datasource ?? WorkoutDatasource();
 
   // ── Estado ───────────────────────────────────────────────────────────────
 
@@ -32,7 +37,6 @@ class WorkoutProvider extends ChangeNotifier {
 
   // ── Inicialización ──────────────────────────────────────────────────────
 
-  /// Carga inicial con SWR cache.
   void loadInitial() {
     _loadWithCache();
   }
@@ -49,7 +53,7 @@ class WorkoutProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Carga con SWR cache ─────────────────────────────────────────────────
+  // ── SWR Cache Load ────────────────────────────────────────────────────────
 
   Future<void> _loadWithCache() async {
     final hadData = _hasLoadedOnce;
@@ -63,22 +67,17 @@ class WorkoutProvider extends ChangeNotifier {
       _clearError();
     }
 
-    // 1. Intentar cache primero
-    final cached = await CacheManager.getCache('workouts');
-    if (cached != null) {
-      final cachedList = cached is List ? cached : [];
-      if (!hadData) {
-        _workouts = cachedList
-            .map((e) => WorkoutModel.fromJson(e as Map<String, dynamic>))
-            .toList();
-        _isLoading = false;
-        _hasLoadedOnce = true;
-        notifyListeners();
-      } else {
-        _workouts = cachedList
-            .map((e) => WorkoutModel.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
+    // 1. Intentar cache primero (stale tolerance)
+    final stale = await CacheManager.getStale<List<dynamic>>('workouts');
+    if (stale != null && stale.data != null) {
+      final cachedList = stale.data as List;
+      _workouts = cachedList
+          .map((e) => WorkoutModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      _isLoading = false;
+      _hasLoadedOnce = true;
+      _isUsingStaleData = stale.isExpired;
+      notifyListeners();
     }
 
     // 2. Fetch en background
@@ -91,7 +90,6 @@ class WorkoutProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      // Cachear la respuesta como listas de mapas
       await CacheManager.setCache(
         'workouts',
         freshList.map((w) => w.toJson()).toList(),
@@ -102,6 +100,7 @@ class WorkoutProvider extends ChangeNotifier {
   }
 
   void _handleFetchError(dynamic e) {
+    debugPrint('[WorkoutProvider] Fetch error: $e');
     if (_hasLoadedOnce) {
       _isUsingStaleData = true;
       _isLoading = false;
@@ -117,9 +116,10 @@ class WorkoutProvider extends ChangeNotifier {
   // ── Eventos públicos ─────────────────────────────────────────────────────
 
   /// Recarga forzada (pull-to-refresh).
+  /// NO limpia caché - mantiene stale visible mientras revalida.
   Future<void> loadHistory() async {
-    await CacheManager.clearCache('workouts');
-    _hasLoadedOnce = false;
+    _cancelToken?.cancel();
+    _cancelToken = CancelToken();
     await _loadWithCache();
   }
 
@@ -139,17 +139,28 @@ class WorkoutProvider extends ChangeNotifier {
     }
   }
 
-  /// Elimina un workout. Remueve de la lista local y del backend.
+  /// Elimina un workout. Remueve de la lista local y persiste en caché.
   Future<void> deleteWorkout(int id) async {
     try {
       await _datasource.deleteWorkout(id);
       _workouts.removeWhere((w) => w.id == id);
       _selectedWorkout = null;
       notifyListeners();
+
+      await CacheManager.setCache(
+        'workouts',
+        _workouts.map((w) => w.toJson()).toList(),
+      );
     } catch (e) {
       debugPrint('[WorkoutProvider] Error deleting workout $id: $e');
       _errorMessage = 'Error al eliminar el entrenamiento';
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _cancelToken?.cancel();
+    super.dispose();
   }
 }

@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/cache/cache_manager.dart';
+import '../../../../core/network/cancel_token.dart';
 import '../../data/models/analytics_models.dart';
 import '../../domain/analytics_period.dart';
 import '../../domain/analytics_repository.dart';
 
 /// ChangeNotifier que centraliza el estado de analíticas con SWR cache.
 ///
-/// Sigue el patrón de [AuthProvider]: estado privado + getters públicos,
-/// helpers `_setLoading`/`_clearError`, `notifyListeners()` tras cambios.
-///
-/// Reemplaza el state + lógica SWR que actualmente vive en [AnalyticsScreen].
+/// Optimización clave: distingue endpoints **globales** (independientes del período)
+/// de los **dependientes del período**. Al cambiar período, solo se refrescan
+/// los dependientes; los globales se revalidan en background sin bloquear UI.
 class AnalyticsProvider extends ChangeNotifier {
   final IAnalyticsRepository _repository;
 
   AnalyticsProvider({required IAnalyticsRepository repository})
-      : _repository = repository;
+    : _repository = repository;
 
   // ── Estado público ───────────────────────────────────────────────────────
 
@@ -24,12 +24,17 @@ class AnalyticsProvider extends ChangeNotifier {
   String? _error;
   bool _isUsingStaleData = false;
   bool _hasLoadedOnce = false;
+  bool _periodLoading = false;
+  bool _globalsStale = false;
+  CancelToken? _cancelToken;
 
   AnalyticsPeriod get period => _period;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isUsingStaleData => _isUsingStaleData;
   bool get hasLoadedOnce => _hasLoadedOnce;
+  bool get periodLoading => _periodLoading;
+  bool get globalsStale => _globalsStale;
 
   // Datos de analíticas
   AnalyticsSummaryModel? _summary;
@@ -65,45 +70,60 @@ class AnalyticsProvider extends ChangeNotifier {
 
   // ── Eventos públicos ─────────────────────────────────────────────────────
 
-  /// Cambia el período y recarga datos con cache SWR.
+  /// Cambia el período y recarga SOLO endpoints dependientes del período.
+  /// Los globales se mantienen y se revalidan en background.
   void changePeriod(AnalyticsPeriod newPeriod) {
     if (_period == newPeriod) return;
     _period = newPeriod;
+
+    // Cancelar request anterior si existe
+    _cancelToken?.cancel();
+    _cancelToken = CancelToken();
+    final token = _cancelToken!;
+
+    _periodLoading = true;
+    _isUsingStaleData = true;
     notifyListeners();
-    _loadDataWithCache();
+
+    // Fetch solo period-dependent en paralelo
+    _loadPeriodDependent(token);
+
+    // Background revalidation de globales (fire-and-forget)
+    _revalidateGlobalsInBackground();
   }
 
   // ── Métodos de acceso a datasource para screens específicas ──────────
 
-  /// Obtiene todos los ejercicios disponibles.
-  Future<List<ExerciseModel>> getExercises() =>
-      _repository.getExercises();
+  Future<List<ExerciseModel>> getExercises() => _repository.getExercises();
 
-  /// Busca ejercicios con filtros.
   Future<List<ExerciseModel>> getExercisesFiltered({
     String? name,
     String? muscleGroup,
     String? equipment,
     int page = 0,
     int size = 20,
-  }) =>
-      _repository.getExercisesFiltered(
-        name: name,
-        muscleGroup: muscleGroup,
-        equipment: equipment,
-        page: page,
-        size: size,
-      );
+  }) => _repository.getExercisesFiltered(
+    name: name,
+    muscleGroup: muscleGroup,
+    equipment: equipment,
+    page: page,
+    size: size,
+  );
 
-  /// Obtiene la progresión 1RM de un ejercicio.
   Future<List<Progression1RMModel>> get1RMProgression(int exerciseId) =>
       _repository.get1RMProgression(exerciseId);
 
-  /// Fuerza refresco ignorando cache (pull-to-refresh).
+  /// Fuerza refresco completo ignorando cache.
   Future<void> forceRefresh() async {
-    await CacheManager.clearAllCache();
-    _hasLoadedOnce = false;
-    await _loadAllData();
+    _cancelToken?.cancel();
+    _cancelToken = CancelToken();
+    await _loadDataWithCache();
+  }
+
+  @override
+  void dispose() {
+    _cancelToken?.cancel();
+    super.dispose();
   }
 
   // ── Helpers internos ─────────────────────────────────────────────────────
@@ -122,59 +142,11 @@ class AnalyticsProvider extends ChangeNotifier {
     debugPrint('[AnalyticsProvider] Error: $e');
     _error = 'Error al cargar las analíticas';
     _isLoading = false;
+    _periodLoading = false;
     notifyListeners();
   }
 
-  // ── Carga pull-to-refresh (sin cache) ────────────────────────────────────
-
-  Future<void> _loadAllData() async {
-    _setLoading(true);
-    _clearError();
-    _isUsingStaleData = false;
-    notifyListeners();
-
-    final range = _period.dateRange();
-    final duration = range.to.difference(range.from);
-    final prevFrom = range.from.subtract(duration);
-    final prevTo = range.from;
-
-    try {
-      final results = await Future.wait([
-        _repository.getSummary(range.from, range.to),
-        _repository.getRecentPRs(range.from, range.to),
-        _repository.getTopExercises(limit: 5),
-        _repository.getWeeklyVolume(range.from, range.to),
-        _repository.getWeeklyVolume(prevFrom, prevTo),
-        _repository.getMuscleDistribution(range.from, range.to),
-        _repository.getTrainingDays(range.from, range.to),
-        _repository.getDurationStats(range.from, range.to),
-        _repository.getVolumeDensity(),
-        _repository.getTrainingStyle(range.from, range.to),
-        _repository.getWeeklyRhythm(),
-      ]);
-
-      _summary = results[0] as AnalyticsSummaryModel;
-      _recentPRs = results[1] as List<RecentPrModel>;
-      _topExercises = results[2] as List<TopExerciseModel>;
-      _weeklyVolume = results[3] as List<WeeklyVolumeModel>;
-      _previousWeeklyVolume = results[4] as List<WeeklyVolumeModel>;
-      _muscleDistribution = results[5] as List<MuscleDistributionModel>;
-      _consistency = results[6] as ConsistencyModel;
-      _durationStats = results[7] as DurationStatsModel;
-      _volumeDensity = results[8] as VolumeDensityModel;
-      _trainingStyle = results[9] as TrainingStyleModel;
-      _weeklyRhythm = results[10] as WeeklyRhythmModel;
-
-      _isLoading = false;
-      _hasLoadedOnce = true;
-      notifyListeners();
-    } catch (e, st) {
-      debugPrint('[AnalyticsProvider] Error loading all: $e\n$st');
-      _handleError(e);
-    }
-  }
-
-  // ── Carga con SWR cache (init + period change) ──────────────────────────
+  // ── Carga completa con SWR (primera carga) ──────────────────────────────
 
   Future<void> _loadDataWithCache() async {
     final hadData = _hasLoadedOnce;
@@ -194,22 +166,38 @@ class AnalyticsProvider extends ChangeNotifier {
     final prevTo = range.from;
 
     try {
+      // Period-dependent endpoints (fetch)
       final summary = await _repository.getSummary(range.from, range.to);
       final recentPRs = await _repository.getRecentPRs(range.from, range.to);
+      final weeklyVolume = await _repository.getWeeklyVolume(
+        range.from,
+        range.to,
+      );
+      final previousWeeklyVolume = await _repository.getWeeklyVolume(
+        prevFrom,
+        prevTo,
+      );
+      final muscleDistribution = await _repository.getMuscleDistribution(
+        range.from,
+        range.to,
+      );
+      final consistency = await _repository.getTrainingDays(
+        range.from,
+        range.to,
+      );
+      final durationStats = await _repository.getDurationStats(
+        range.from,
+        range.to,
+      );
+      final trainingStyle = await _repository.getTrainingStyle(
+        range.from,
+        range.to,
+      );
+
+      // Global endpoints (fetch on initial load)
       final topExercises = await _repository.getTopExercises(limit: 5);
-      final weeklyVolume = await _repository.getWeeklyVolume(range.from, range.to);
-      final previousWeeklyVolume = await _repository.getWeeklyVolume(prevFrom, prevTo);
       final volumeDensity = await _repository.getVolumeDensity();
       final weeklyRhythm = await _repository.getWeeklyRhythm();
-
-      final muscleDistribution =
-          await _repository.getMuscleDistribution(range.from, range.to);
-      final consistency =
-          await _repository.getTrainingDays(range.from, range.to);
-      final durationStats =
-          await _repository.getDurationStats(range.from, range.to);
-      final trainingStyle =
-          await _repository.getTrainingStyle(range.from, range.to);
 
       _summary = summary;
       _recentPRs = recentPRs;
@@ -223,6 +211,7 @@ class AnalyticsProvider extends ChangeNotifier {
       _trainingStyle = trainingStyle;
       _weeklyRhythm = weeklyRhythm;
       _isLoading = false;
+      _periodLoading = false;
       _hasLoadedOnce = true;
       notifyListeners();
 
@@ -233,7 +222,73 @@ class AnalyticsProvider extends ChangeNotifier {
     }
   }
 
-  /// Verifica si hay datos stale y programa rechequeo del indicador.
+  // ── Fetch solo period-dependent endpoints ────────────────────────────────
+
+  Future<void> _loadPeriodDependent(CancelToken token) async {
+    final range = _period.dateRange();
+    final duration = range.to.difference(range.from);
+    final prevFrom = range.from.subtract(duration);
+    final prevTo = range.from;
+
+    try {
+      final futures = Future.wait([
+        _repository.getSummary(range.from, range.to),
+        _repository.getRecentPRs(range.from, range.to),
+        _repository.getWeeklyVolume(range.from, range.to),
+        _repository.getWeeklyVolume(prevFrom, prevTo),
+        _repository.getMuscleDistribution(range.from, range.to),
+        _repository.getTrainingDays(range.from, range.to),
+        _repository.getDurationStats(range.from, range.to),
+        _repository.getTrainingStyle(range.from, range.to),
+      ]);
+
+      token.throwIfCancelled();
+      final results = await futures;
+
+      _summary = results[0] as AnalyticsSummaryModel;
+      _recentPRs = results[1] as List<RecentPrModel>;
+      _weeklyVolume = results[2] as List<WeeklyVolumeModel>;
+      _previousWeeklyVolume = results[3] as List<WeeklyVolumeModel>;
+      _muscleDistribution = results[4] as List<MuscleDistributionModel>;
+      _consistency = results[5] as ConsistencyModel;
+      _durationStats = results[6] as DurationStatsModel;
+      _trainingStyle = results[7] as TrainingStyleModel;
+
+      _periodLoading = false;
+      notifyListeners();
+    } catch (e) {
+      if (e is RequestCancelledException) return;
+      debugPrint('[AnalyticsProvider] Period load error: $e');
+      _periodLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ── Background revalidation de endpoints globales ───────────────────────
+
+  Future<void> _revalidateGlobalsInBackground() async {
+    try {
+      final futures = Future.wait([
+        _repository.getTopExercises(limit: 5),
+        _repository.getVolumeDensity(),
+        _repository.getWeeklyRhythm(),
+      ]);
+
+      final results = await futures;
+      _topExercises = results[0] as List<TopExerciseModel>;
+      _volumeDensity = results[1] as VolumeDensityModel;
+      _weeklyRhythm = results[2] as WeeklyRhythmModel;
+      _globalsStale = false;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[AnalyticsProvider] Global revalidation error: $e');
+      _globalsStale = true;
+      notifyListeners();
+    }
+  }
+
+  // ── Stale state check ───────────────────────────────────────────────────
+
   Future<void> _checkStaleState() async {
     final range = _period.dateRange();
     final fromUtc = range.from.toUtc().toIso8601String();
@@ -243,6 +298,8 @@ class AnalyticsProvider extends ChangeNotifier {
       CacheManager.getStale('analytics_summary_${fromUtc}_$toUtc'),
       CacheManager.getStale('analytics_recent_prs_${fromUtc}_$toUtc'),
       CacheManager.getStale('analytics_top_exercises_5'),
+      CacheManager.getStale('analytics_weekly_volume_${fromUtc}_$toUtc'),
+      CacheManager.getStale('analytics_training_days_${fromUtc}_$toUtc'),
       CacheManager.getStale('analytics_volume_density'),
       CacheManager.getStale('analytics_weekly_rhythm'),
     ]);
@@ -250,10 +307,11 @@ class AnalyticsProvider extends ChangeNotifier {
     _isUsingStaleData = staleChecks.any((entry) => entry?.isExpired == true);
     notifyListeners();
 
-    // Rechequeo a los 5s para limpiar indicador si ya refrescó
     Future.delayed(const Duration(seconds: 5), () async {
       final recheck = await Future.wait([
         CacheManager.getStale('analytics_summary_${fromUtc}_$toUtc'),
+        CacheManager.getStale('analytics_weekly_volume_${fromUtc}_$toUtc'),
+        CacheManager.getStale('analytics_training_days_${fromUtc}_$toUtc'),
         CacheManager.getStale('analytics_volume_density'),
       ]);
       final stillStale = recheck.any((entry) => entry?.isExpired == true);
