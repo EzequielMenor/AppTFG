@@ -14,7 +14,7 @@ import '../models/workout_models.dart';
 class WorkoutDatasource implements IWorkoutRepository, IWorkoutTrackerRepository {
   @override
   Future<List<WorkoutModel>> getWorkouts({int page = 0, int size = 20}) async {
-    final response = await ApiClient.get(
+    final response = await ApiClientLegacy.get(
       '/api/workouts',
       queryParams: {'page': page.toString(), 'size': size.toString()},
     );
@@ -31,7 +31,7 @@ class WorkoutDatasource implements IWorkoutRepository, IWorkoutTrackerRepository
 
   @override
   Future<WorkoutModel> getWorkout(int id) async {
-    final response = await ApiClient.get('/api/workouts/$id');
+    final response = await ApiClientLegacy.get('/api/workouts/$id');
     if (response.statusCode == 200) {
       final data =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -42,7 +42,7 @@ class WorkoutDatasource implements IWorkoutRepository, IWorkoutTrackerRepository
 
   @override
   Future<WorkoutModel> createWorkout(Map<String, dynamic> data) async {
-    final response = await ApiClient.post('/api/workouts', body: data);
+    final response = await ApiClientLegacy.post('/api/workouts', body: data);
     if (response.statusCode == 200 || response.statusCode == 201) {
       final body =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -56,7 +56,7 @@ class WorkoutDatasource implements IWorkoutRepository, IWorkoutTrackerRepository
     int id,
     Map<String, dynamic> data,
   ) async {
-    final response = await ApiClient.put('/api/workouts/$id', body: data);
+    final response = await ApiClientLegacy.put('/api/workouts/$id', body: data);
     if (response.statusCode == 200) {
       final body =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -67,7 +67,7 @@ class WorkoutDatasource implements IWorkoutRepository, IWorkoutTrackerRepository
 
   @override
   Future<void> deleteWorkout(int id) async {
-    final response = await ApiClient.delete('/api/workouts/$id');
+    final response = await ApiClientLegacy.delete('/api/workouts/$id');
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception('Error al borrar workout $id: ${response.statusCode}');
     }

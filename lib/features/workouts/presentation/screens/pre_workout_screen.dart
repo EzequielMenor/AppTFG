@@ -38,8 +38,10 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.cardBackground,
-        title: const Text('Borrar rutina',
-            style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Borrar rutina',
+          style: TextStyle(color: Colors.white),
+        ),
         content: Text(
           '¿Seguro que quieres borrar "${routine.name}"?',
           style: const TextStyle(color: Colors.grey),
@@ -47,24 +49,29 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar',
-                style: TextStyle(color: AppTheme.neonGreen)),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: AppTheme.neonGreen),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Borrar',
-                style: TextStyle(color: Colors.red)),
+            child: const Text('Borrar', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
     if (!mounted) return;
-    final deleted = await context.read<RoutineProvider>().deleteRoutine(routine.id);
+    final deleted = await context.read<RoutineProvider>().deleteRoutine(
+      routine.id,
+    );
     if (!deleted && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${context.read<RoutineProvider>().error}'),
+          content: Text(
+            'Error: ${context.read<RoutineProvider>().errorMessage}',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -106,8 +113,7 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
 
   Future<void> _goToCreate() async {
     final result = await Navigator.of(context).push<RoutineModel>(
-      MaterialPageRoute(
-          builder: (_) => const CreateRoutineScreen()),
+      MaterialPageRoute(builder: (_) => const CreateRoutineScreen()),
     );
     if (result != null) {
       if (!mounted) return;
@@ -134,9 +140,18 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: _buildRoutineList(prov),
-          ),
+          if (prov.isUsingStaleData)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              color: Colors.orange.withValues(alpha: 0.1),
+              child: const Text(
+                'Actualizando…',
+                style: TextStyle(color: Colors.orange, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          Expanded(child: _buildRoutineList(prov)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: OutlinedButton.icon(
@@ -145,7 +160,9 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
               label: const Text(
                 'Entrenamiento libre',
                 style: TextStyle(
-                    color: AppTheme.neonGreen, fontWeight: FontWeight.bold),
+                  color: AppTheme.neonGreen,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: AppTheme.neonGreen),
@@ -159,21 +176,26 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
   }
 
   Widget _buildRoutineList(RoutineProvider prov) {
-    if (prov.isLoading && prov.routines.isEmpty) {
+    if (prov.isLoading && !prov.hasLoadedOnce && prov.routines.isEmpty) {
       return const Center(
-          child: CircularProgressIndicator(color: AppTheme.neonGreen));
+        child: CircularProgressIndicator(color: AppTheme.neonGreen),
+      );
     }
-    if (prov.error != null && prov.routines.isEmpty) {
+    if (prov.errorMessage != null &&
+        !prov.hasLoadedOnce &&
+        prov.routines.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(prov.error!, style: const TextStyle(color: Colors.red)),
+            Text(prov.errorMessage!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 12),
             TextButton(
               onPressed: () => context.read<RoutineProvider>().loadRoutines(),
-              child: const Text('Reintentar',
-                  style: TextStyle(color: AppTheme.neonGreen)),
+              child: const Text(
+                'Reintentar',
+                style: TextStyle(color: AppTheme.neonGreen),
+              ),
             ),
           ],
         ),
@@ -186,10 +208,11 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
         const Text(
           'MIS RUTINAS',
           style: TextStyle(
-              color: Colors.grey,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1),
+            color: Colors.grey,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1,
+          ),
         ),
         const SizedBox(height: 8),
         if (prov.routines.isEmpty && !prov.isLoading)
@@ -200,17 +223,21 @@ class _PreWorkoutScreenState extends State<PreWorkoutScreen> {
               style: TextStyle(color: Colors.grey),
             ),
           ),
-        ...prov.routines.map((r) => _RoutineCard(
-              routine: r,
-              onTap: () => _startRoutine(r),
-              onLongPress: () => _deleteRoutine(r),
-            )),
+        ...prov.routines.map(
+          (r) => _RoutineCard(
+            routine: r,
+            onTap: () => _startRoutine(r),
+            onLongPress: () => _deleteRoutine(r),
+          ),
+        ),
         const SizedBox(height: 8),
         TextButton.icon(
           onPressed: _goToCreate,
           icon: const Icon(Icons.add, color: AppTheme.neonGreen),
-          label: const Text('Crear nueva rutina',
-              style: TextStyle(color: AppTheme.neonGreen)),
+          label: const Text(
+            'Crear nueva rutina',
+            style: TextStyle(color: AppTheme.neonGreen),
+          ),
         ),
       ],
     );
@@ -250,9 +277,10 @@ class _RoutineCard extends StatelessWidget {
                   Text(
                     routine.name,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(

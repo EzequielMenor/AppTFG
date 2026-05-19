@@ -32,7 +32,7 @@ class ProfileDatasource {
   /// Retorna un [ImportResult] con el conteo de éxito/fallo y preview
   /// de las filas problemáticas.
   Future<ImportResult> importCsv(String filePath) async {
-    final response = await ApiClient.postMultipart(
+    final response = await ApiClientLegacy.postMultipart(
       '/api/import/hevy',
       filePath: filePath,
       fieldName: 'file',
@@ -63,7 +63,7 @@ class ProfileDatasource {
 
   /// Borra todos los entrenamientos via API y limpia la caché local.
   Future<void> clearData() async {
-    final response = await ApiClient.delete('/api/workouts');
+    final response = await ApiClientLegacy.delete('/api/workouts');
     if (response.statusCode == 200) {
       await CacheManager.clearAllCache();
     } else {

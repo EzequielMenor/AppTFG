@@ -10,7 +10,7 @@ class ProfileRemoteDatasource {
   /// Retorna un [ImportResult] con el conteo de éxito/fallo y preview
   /// de las filas problemáticas.
   Future<ImportResult> importCsv(String filePath) async {
-    final response = await ApiClient.postMultipart(
+    final response = await ApiClientLegacy.postMultipart(
       '/api/import/hevy',
       filePath: filePath,
       fieldName: 'file',
@@ -39,7 +39,7 @@ class ProfileRemoteDatasource {
 
   /// Borra todos los entrenamientos vía API.
   Future<void> clearWorkouts() async {
-    final response = await ApiClient.delete('/api/workouts');
+    final response = await ApiClientLegacy.delete('/api/workouts');
     if (response.statusCode != 200) {
       throw Exception('Error del servidor (${response.statusCode}).');
     }

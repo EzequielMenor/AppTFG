@@ -122,7 +122,9 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${context.read<RoutineProvider>().error}'),
+            content: Text(
+              'Error: ${context.read<RoutineProvider>().errorMessage}',
+            ),
             backgroundColor: Colors.red,
           ),
         );

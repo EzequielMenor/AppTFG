@@ -33,28 +33,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       body: SafeArea(
-        child: provider.isLoading && !provider.hasLoadedOnce
-            ? const Center(
-                child: CircularProgressIndicator(color: AppTheme.neonGreen),
-              )
-            : provider.error != null && !provider.hasLoadedOnce
-                ? _buildError(provider)
-                : RefreshIndicator(
-                    color: AppTheme.neonGreen,
-                    onRefresh: provider.forceRefresh,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-                      children: [
-                        _buildHeader(username),
-                        const SizedBox(height: 28),
-                        _buildKpiRow(provider),
-                        const SizedBox(height: 28),
-                        _buildWeeklyChart(provider),
-                        const SizedBox(height: 28),
-                        _buildRecentPRs(provider),
-                      ],
+        child: Column(
+          children: [
+            if (provider.isUsingStaleData)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                color: Colors.orange.withValues(alpha: 0.1),
+                child: const Text(
+                  'Mostrando datos guardados. Actualizando…',
+                  style: TextStyle(color: Colors.orange, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            Expanded(
+              child: provider.isLoading && !provider.hasLoadedOnce
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.neonGreen,
+                      ),
+                    )
+                  : provider.error != null && !provider.hasLoadedOnce
+                  ? _buildError(provider)
+                  : RefreshIndicator(
+                      color: AppTheme.neonGreen,
+                      onRefresh: provider.forceRefresh,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                        children: [
+                          _buildHeader(username),
+                          const SizedBox(height: 28),
+                          _buildKpiRow(provider),
+                          const SizedBox(height: 28),
+                          _buildWeeklyChart(provider),
+                          const SizedBox(height: 28),
+                          _buildRecentPRs(provider),
+                        ],
+                      ),
                     ),
-                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -71,9 +90,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text(
                 'Hello, $username 👋',
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold),
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 4),
               const Text(
@@ -94,9 +114,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Text(
               username.isNotEmpty ? username[0].toUpperCase() : '?',
               style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18),
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
           ),
         ),
@@ -140,8 +161,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         height: 160,
         child: values.isEmpty
             ? const Center(
-                child: Text('Sin datos aún',
-                    style: TextStyle(color: AppTheme.textGrey)))
+                child: Text(
+                  'Sin datos aún',
+                  style: TextStyle(color: AppTheme.textGrey),
+                ),
+              )
             : AppBarChart(
                 values: values,
                 labels: labels,
@@ -161,15 +185,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       title: 'Recent PRs',
       trailing: TextButton(
         onPressed: () => context.go('/history'),
-        child: const Text('Ver historial',
-            style: TextStyle(color: AppTheme.neonGreen, fontSize: 13)),
+        child: const Text(
+          'Ver historial',
+          style: TextStyle(color: AppTheme.neonGreen, fontSize: 13),
+        ),
       ),
       child: prs.isEmpty
           ? const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
-                child: Text('Sin récords en los últimos 30 días',
-                    style: TextStyle(color: AppTheme.textGrey)),
+                child: Text(
+                  'Sin récords en los últimos 30 días',
+                  style: TextStyle(color: AppTheme.textGrey),
+                ),
               ),
             )
           : Column(children: prs.map((pr) => _PrTile(pr: pr)).toList()),
@@ -187,9 +215,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             const Icon(Icons.wifi_off, size: 56, color: Colors.redAccent),
             const SizedBox(height: 16),
-            const Text('No se pudo cargar el dashboard',
-                style: TextStyle(color: Colors.white, fontSize: 16),
-                textAlign: TextAlign.center),
+            const Text(
+              'No se pudo cargar el dashboard',
+              style: TextStyle(color: Colors.white, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             Text(
               provider.error ?? '',
@@ -200,8 +230,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ElevatedButton(
               onPressed: () => provider.forceRefresh(),
               style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.neonGreen,
-                  foregroundColor: Colors.black),
+                backgroundColor: AppTheme.neonGreen,
+                foregroundColor: Colors.black,
+              ),
               child: const Text('Reintentar'),
             ),
           ],
@@ -245,18 +276,24 @@ class _KpiCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: const TextStyle(
-                    color: AppTheme.textGrey,
-                    fontSize: 10,
-                    letterSpacing: 1.1,
-                    fontWeight: FontWeight.w600)),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.textGrey,
+                fontSize: 10,
+                letterSpacing: 1.1,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(value,
-                style: TextStyle(
-                    color: valueColor ?? Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold)),
+            Text(
+              value,
+              style: TextStyle(
+                color: valueColor ?? Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       ),
@@ -269,8 +306,7 @@ class _SectionCard extends StatelessWidget {
   final Widget child;
   final Widget? trailing;
 
-  const _SectionCard(
-      {required this.title, required this.child, this.trailing});
+  const _SectionCard({required this.title, required this.child, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -286,11 +322,14 @@ class _SectionCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold)),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               ?trailing,
             ],
           ),
@@ -320,22 +359,31 @@ class _PrTile extends StatelessWidget {
               color: AppTheme.neonGreen.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.emoji_events,
-                color: AppTheme.neonGreen, size: 20),
+            child: const Icon(
+              Icons.emoji_events,
+              color: AppTheme.neonGreen,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(pr.exerciseName,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600)),
+                Text(
+                  pr.exerciseName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 Text(
                   DateFormat('d MMM yyyy', 'es').format(pr.date),
-                  style: const TextStyle(color: AppTheme.textGrey, fontSize: 12),
+                  style: const TextStyle(
+                    color: AppTheme.textGrey,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -346,23 +394,26 @@ class _PrTile extends StatelessWidget {
               Text(
                 '${pr.maxWeight.toStringAsFixed(1)} kg',
                 style: const TextStyle(
-                    color: AppTheme.neonGreen,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold),
+                  color: AppTheme.neonGreen,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppTheme.neonGreen.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text('NEW PR',
-                    style: TextStyle(
-                        color: AppTheme.neonGreen,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.8)),
+                child: const Text(
+                  'NEW PR',
+                  style: TextStyle(
+                    color: AppTheme.neonGreen,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                  ),
+                ),
               ),
             ],
           ),

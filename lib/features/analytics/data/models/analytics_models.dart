@@ -98,9 +98,9 @@ class AnalyticsSummaryModel {
       );
 
   Map<String, dynamic> toJson() => {
-        'sessionCount': sessionCount,
-        'totalVolume': totalVolume,
-      };
+    'sessionCount': sessionCount,
+    'totalVolume': totalVolume,
+  };
 }
 
 class RecentPrModel {
@@ -122,10 +122,10 @@ class RecentPrModel {
   );
 
   Map<String, dynamic> toJson() => {
-        'exerciseName': exerciseName,
-        'maxWeight': maxWeight,
-        'date': date.toIso8601String(),
-      };
+    'exerciseName': exerciseName,
+    'maxWeight': maxWeight,
+    'date': date.toIso8601String(),
+  };
 }
 
 class TopExerciseModel {
@@ -147,10 +147,10 @@ class TopExerciseModel {
       );
 
   Map<String, dynamic> toJson() => {
-        'rank': rank,
-        'exerciseName': exerciseName,
-        'best1Rm': best1Rm,
-      };
+    'rank': rank,
+    'exerciseName': exerciseName,
+    'best1Rm': best1Rm,
+  };
 }
 
 class WeeklyVolumeModel {
@@ -166,9 +166,9 @@ class WeeklyVolumeModel {
       );
 
   Map<String, dynamic> toJson() => {
-        'weekStart': weekStart.toIso8601String(),
-        'totalVolume': totalVolume,
-      };
+    'weekStart': weekStart.toIso8601String(),
+    'totalVolume': totalVolume,
+  };
 }
 
 class MuscleDistributionModel {
@@ -188,6 +188,12 @@ class MuscleDistributionModel {
         sets: json['sets'] as int,
         percentage: (json['percentage'] as num).toDouble(),
       );
+
+  Map<String, dynamic> toJson() => {
+    'muscleGroup': muscleGroup,
+    'sets': sets,
+    'percentage': percentage,
+  };
 }
 
 class ConsistencyModel {
@@ -218,6 +224,13 @@ class ConsistencyModel {
       trainingDays: trainingDays,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'currentStreak': currentStreak,
+    'bestStreak': bestStreak,
+    'avgDaysPerWeek': avgDaysPerWeek,
+    'trainingDays': trainingDays.map((d) => d.toIso8601String()).toList(),
+  };
 }
 
 class DurationStatsModel {
@@ -234,6 +247,11 @@ class DurationStatsModel {
         avgMinutes: json['avgMinutes'] as int? ?? 0,
         longestMinutes: json['longestMinutes'] as int? ?? 0,
       );
+
+  Map<String, dynamic> toJson() => {
+    'avgMinutes': avgMinutes,
+    'longestMinutes': longestMinutes,
+  };
 }
 
 // ── EZE-168 models ────────────────────────────────────────────────────────────
@@ -257,10 +275,10 @@ class VolumeDensityModel {
       );
 
   Map<String, dynamic> toJson() => {
-        'currentDensity': currentDensity,
-        'previousDensity': previousDensity,
-        'changePercent': changePercent,
-      };
+    'currentDensity': currentDensity,
+    'previousDensity': previousDensity,
+    'changePercent': changePercent,
+  };
 }
 
 class TrainingStyleModel {
@@ -280,6 +298,12 @@ class TrainingStyleModel {
         hypertrophySets: (json['hypertrophySets'] as num? ?? 0).toInt(),
         enduranceSets: (json['enduranceSets'] as num? ?? 0).toInt(),
       );
+
+  Map<String, dynamic> toJson() => {
+    'strengthSets': strengthSets,
+    'hypertrophySets': hypertrophySets,
+    'enduranceSets': enduranceSets,
+  };
 }
 
 class WeeklyRhythmModel {
@@ -297,9 +321,7 @@ class WeeklyRhythmModel {
     return WeeklyRhythmModel(sessionsByDayOfWeek: raw);
   }
 
-  Map<String, dynamic> toJson() => {
-        'sessionsByDayOfWeek': sessionsByDayOfWeek,
-      };
+  Map<String, dynamic> toJson() => {'sessionsByDayOfWeek': sessionsByDayOfWeek};
 }
 
 // ── EZE-169 model ─────────────────────────────────────────────────────────────

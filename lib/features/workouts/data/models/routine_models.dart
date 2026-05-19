@@ -134,6 +134,18 @@ class RoutineExerciseModel {
       thumbnailUrl: thumbnailUrl,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'exerciseId': exerciseId,
+    'exerciseOrder': exerciseOrder,
+    'exerciseName': exerciseName,
+    if (muscleGroup != null) 'muscleGroup': muscleGroup,
+    'secondaryMuscles': secondaryMuscles,
+    if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
+    if (notes != null) 'notes': notes,
+    'series': series.map((s) => s.toJson()).toList(),
+  };
 }
 
 class RoutineModel {
@@ -148,6 +160,13 @@ class RoutineModel {
     this.description,
     required this.exercises,
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    if (description != null) 'description': description,
+    'exercises': exercises.map((e) => e.toJson()).toList(),
+  };
 
   factory RoutineModel.fromJson(Map<String, dynamic> json) {
     final rawExercises = json['exercises'] as List<dynamic>? ?? [];

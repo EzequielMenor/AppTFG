@@ -10,7 +10,7 @@ import '../models/routine_models.dart';
 class RoutineDatasource implements IRoutineRepository {
   @override
   Future<List<RoutineModel>> getRoutines() async {
-    final response = await ApiClient.get('/api/routines');
+    final response = await ApiClientLegacy.get('/api/routines');
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
       return data
@@ -32,7 +32,7 @@ class RoutineDatasource implements IRoutineRepository {
         'description': description,
       'exercises': exercises,
     };
-    final response = await ApiClient.post('/api/routines', body: body);
+    final response = await ApiClientLegacy.post('/api/routines', body: body);
     if (response.statusCode == 200 || response.statusCode == 201) {
       final data =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -54,7 +54,7 @@ class RoutineDatasource implements IRoutineRepository {
         'description': description,
       'exercises': exercises,
     };
-    final response = await ApiClient.put('/api/routines/$id', body: body);
+    final response = await ApiClientLegacy.put('/api/routines/$id', body: body);
     if (response.statusCode == 200) {
       final data =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -65,7 +65,7 @@ class RoutineDatasource implements IRoutineRepository {
 
   @override
   Future<void> deleteRoutine(int id) async {
-    final response = await ApiClient.delete('/api/routines/$id');
+    final response = await ApiClientLegacy.delete('/api/routines/$id');
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception('Error al borrar rutina: ${response.statusCode}');
     }

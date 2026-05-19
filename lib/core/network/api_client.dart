@@ -1,9 +1,12 @@
+import 'dart:async' show TimeoutException;
 import 'dart:convert';
 import 'dart:io' show Platform;
-import 'dart:async' show TimeoutException;
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'api_exception.dart';
+import 'cancel_token.dart';
+import 'http_response.dart';
 
 /// Cliente HTTP con reintentos automáticos, timeouts mejorados y resolución inteligente de IP.
 ///
@@ -12,7 +15,66 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// - Timeouts apropiados: 30s normal, 60s uploads
 /// - Resolución inteligente de IP del Mac (prioridad: env > localhost > IP)
 /// - Logging detallado para debugging
-class ApiClient {
+abstract class ApiClient {
+  Future<HttpResponse> get(
+    String path, {
+    Map<String, String>? queryParams,
+    CancelToken? cancelToken,
+  });
+
+  Future<HttpResponse> post(String path, {Object? body, CancelToken? cancelToken});
+
+  Future<HttpResponse> put(String path, {Object? body, CancelToken? cancelToken});
+
+  Future<HttpResponse> delete(String path, {CancelToken? cancelToken});
+
+  static final ApiClient _legacyInstance = HttpApiClient();
+
+  static Future<http.Response> getLegacy(
+    String path, {
+    Map<String, String>? queryParams,
+    CancelToken? cancelToken,
+  }) async {
+    debugPrint('[ApiClient] DEPRECATED static call: ApiClient.getLegacy($path)');
+    final response = await _legacyInstance.get(
+      path,
+      queryParams: queryParams,
+      cancelToken: cancelToken,
+    );
+    return http.Response.bytes(response.bodyBytes, response.statusCode, headers: response.headers);
+  }
+
+  static Future<http.Response> postLegacy(
+    String path, {
+    Object? body,
+    CancelToken? cancelToken,
+  }) async {
+    debugPrint('[ApiClient] DEPRECATED static call: ApiClient.postLegacy($path)');
+    final response = await _legacyInstance.post(path, body: body, cancelToken: cancelToken);
+    return http.Response.bytes(response.bodyBytes, response.statusCode, headers: response.headers);
+  }
+
+  static Future<http.Response> putLegacy(
+    String path, {
+    Object? body,
+    CancelToken? cancelToken,
+  }) async {
+    debugPrint('[ApiClient] DEPRECATED static call: ApiClient.putLegacy($path)');
+    final response = await _legacyInstance.put(path, body: body, cancelToken: cancelToken);
+    return http.Response.bytes(response.bodyBytes, response.statusCode, headers: response.headers);
+  }
+
+  static Future<http.Response> deleteLegacy(
+    String path, {
+    CancelToken? cancelToken,
+  }) async {
+    debugPrint('[ApiClient] DEPRECATED static call: ApiClient.deleteLegacy($path)');
+    final response = await _legacyInstance.delete(path, cancelToken: cancelToken);
+    return http.Response.bytes(response.bodyBytes, response.statusCode, headers: response.headers);
+  }
+}
+
+class HttpApiClient implements ApiClient {
   static const String _envUrl = String.fromEnvironment('BACKEND_URL');
   static const String _physicalDeviceIp =
       '192.168.10.162'; // Fallback si no hay env
@@ -78,12 +140,15 @@ class ApiClient {
     Future<http.Response> Function() request,
     String method,
     String path,
+    CancelToken? cancelToken,
   ) async {
     int attempt = 0;
     while (attempt < _maxRetries) {
       try {
         _log('$method $path (attempt ${attempt + 1}/$_maxRetries)');
+        cancelToken?.throwIfCancelled();
         final response = await request();
+        cancelToken?.throwIfCancelled();
         _log('$method $path completed with status ${response.statusCode}');
         return response;
       } on TimeoutException catch (_) {
@@ -96,6 +161,8 @@ class ApiClient {
             _baseRetryDelay * (1 << (attempt - 1)); // exponential backoff
         _log('⏳ $method $path timeout - retrying in ${delay.inMilliseconds}ms');
         await Future.delayed(delay);
+      } on RequestCancelledException {
+        rethrow;
       } catch (e) {
         attempt++;
         if (attempt >= _maxRetries) {
@@ -109,11 +176,13 @@ class ApiClient {
     throw Exception('Failed after $_maxRetries attempts');
   }
 
-  static Future<http.Response> get(
+  @override
+  Future<HttpResponse> get(
     String path, {
     Map<String, String>? queryParams,
+    CancelToken? cancelToken,
   }) async {
-    return _executeWithRetry(
+    final response = await _executeWithRetry(
       () async {
         var uri = Uri.parse('$_baseUrl$path');
         if (queryParams != null) {
@@ -123,11 +192,23 @@ class ApiClient {
       },
       'GET',
       path,
+      cancelToken,
+    );
+    _mapError(response);
+    return HttpResponse(
+      statusCode: response.statusCode,
+      bodyBytes: response.bodyBytes,
+      headers: response.headers,
     );
   }
 
-  static Future<http.Response> post(String path, {Object? body}) async {
-    return _executeWithRetry(
+  @override
+  Future<HttpResponse> post(
+    String path, {
+    Object? body,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await _executeWithRetry(
       () => http
           .post(
             Uri.parse('$_baseUrl$path'),
@@ -137,11 +218,19 @@ class ApiClient {
           .timeout(_standardTimeout),
       'POST',
       path,
+      cancelToken,
     );
+    _mapError(response);
+    return HttpResponse(statusCode: response.statusCode, bodyBytes: response.bodyBytes, headers: response.headers);
   }
 
-  static Future<http.Response> put(String path, {Object? body}) async {
-    return _executeWithRetry(
+  @override
+  Future<HttpResponse> put(
+    String path, {
+    Object? body,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await _executeWithRetry(
       () => http
           .put(
             Uri.parse('$_baseUrl$path'),
@@ -151,26 +240,38 @@ class ApiClient {
           .timeout(_standardTimeout),
       'PUT',
       path,
+      cancelToken,
     );
+    _mapError(response);
+    return HttpResponse(statusCode: response.statusCode, bodyBytes: response.bodyBytes, headers: response.headers);
   }
 
-  static Future<http.Response> delete(String path) async {
-    return _executeWithRetry(
+  @override
+  Future<HttpResponse> delete(
+    String path, {
+    CancelToken? cancelToken,
+  }) async {
+    final response = await _executeWithRetry(
       () => http
           .delete(Uri.parse('$_baseUrl$path'), headers: _headers())
           .timeout(_standardTimeout),
       'DELETE',
       path,
+      cancelToken,
     );
+    _mapError(response);
+    return HttpResponse(statusCode: response.statusCode, bodyBytes: response.bodyBytes, headers: response.headers);
   }
 
-  static Future<http.Response> postMultipart(
+  Future<http.Response> postMultipart(
     String path, {
     required String filePath,
     required String fieldName,
+    CancelToken? cancelToken,
   }) async {
     return _executeWithRetry(
       () async {
+        cancelToken?.throwIfCancelled();
         final session = Supabase.instance.client.auth.currentSession;
         final token = session?.accessToken;
 
@@ -186,10 +287,81 @@ class ApiClient {
         );
 
         final streamed = await request.send().timeout(_uploadTimeout);
+        cancelToken?.throwIfCancelled();
         return http.Response.fromStream(streamed);
       },
       'POST (multipart)',
       path,
+      cancelToken,
+    );
+  }
+
+  dynamic decodeJsonBody(HttpResponse response) {
+    try {
+      final body = utf8.decode(response.bodyBytes);
+      if (body.isEmpty) return null;
+      return jsonDecode(body);
+    } on FormatException {
+      throw const ServerErrorException(500, 'Invalid UTF-8 or malformed JSON response');
+    }
+  }
+
+  void _mapError(http.Response response) {
+    final status = response.statusCode;
+    if (status >= 200 && status < 300) return;
+
+    if (status == 403) throw const ForbiddenException();
+    if (status == 404) throw const NotFoundException();
+    if (status >= 500) throw ServerErrorException(status);
+    if (status == 408) throw const ApiTimeoutException();
+
+    throw GenericApiException('Request failed with status code $status', statusCode: status);
+  }
+}
+
+class ApiClientLegacy {
+  static Future<http.Response> get(
+    String path, {
+    Map<String, String>? queryParams,
+    CancelToken? cancelToken,
+  }) {
+    return ApiClient.getLegacy(path, queryParams: queryParams, cancelToken: cancelToken);
+  }
+
+  static Future<http.Response> post(
+    String path, {
+    Object? body,
+    CancelToken? cancelToken,
+  }) {
+    return ApiClient.postLegacy(path, body: body, cancelToken: cancelToken);
+  }
+
+  static Future<http.Response> put(
+    String path, {
+    Object? body,
+    CancelToken? cancelToken,
+  }) {
+    return ApiClient.putLegacy(path, body: body, cancelToken: cancelToken);
+  }
+
+  static Future<http.Response> delete(
+    String path, {
+    CancelToken? cancelToken,
+  }) {
+    return ApiClient.deleteLegacy(path, cancelToken: cancelToken);
+  }
+
+  static Future<http.Response> postMultipart(
+    String path, {
+    required String filePath,
+    required String fieldName,
+    CancelToken? cancelToken,
+  }) {
+    return (ApiClient._legacyInstance as HttpApiClient).postMultipart(
+      path,
+      filePath: filePath,
+      fieldName: fieldName,
+      cancelToken: cancelToken,
     );
   }
 }

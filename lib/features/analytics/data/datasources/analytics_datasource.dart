@@ -6,7 +6,7 @@ import '../models/analytics_models.dart';
 class AnalyticsDatasource {
   /// Obtiene todos los ejercicios disponibles en el sistema.
   Future<List<ExerciseModel>> getExercises() async {
-    final response = await ApiClient.get(
+    final response = await ApiClientLegacy.get(
       '/api/exercises',
       queryParams: {'size': '200'},
     );
@@ -34,7 +34,7 @@ class AnalyticsDatasource {
       'muscleGroup': ?muscleGroup,
       'equipment': ?equipment,
     };
-    final response = await ApiClient.get('/api/exercises', queryParams: params);
+    final response = await ApiClientLegacy.get('/api/exercises', queryParams: params);
     if (response.statusCode != 200) {
       throw Exception('Error al buscar ejercicios: ${response.statusCode}');
     }
@@ -47,7 +47,7 @@ class AnalyticsDatasource {
   /// Devuelve la progresión de 1RM estimado para [exerciseId].
   Future<List<Progression1RMModel>> get1RMProgression(int exerciseId) async {
     try {
-      final response = await ApiClient.get(
+      final response = await ApiClientLegacy.get(
         '/api/v1/analytics/1rm-progression',
         queryParams: {'exerciseId': exerciseId.toString()},
       );
@@ -67,7 +67,7 @@ class AnalyticsDatasource {
 
   Future<AnalyticsSummaryModel> getSummary(DateTime from, DateTime to) async {
     try {
-      final response = await ApiClient.get(
+      final response = await ApiClientLegacy.get(
         '/api/v1/analytics/summary',
         queryParams: {
           'from': from.toUtc().toIso8601String(),
@@ -89,7 +89,7 @@ class AnalyticsDatasource {
 
   Future<List<RecentPrModel>> getRecentPRs(DateTime from, DateTime to) async {
     try {
-      final response = await ApiClient.get(
+      final response = await ApiClientLegacy.get(
         '/api/v1/analytics/recent-prs',
         queryParams: {
           'from': from.toUtc().toIso8601String(),
@@ -112,7 +112,7 @@ class AnalyticsDatasource {
 
   Future<List<TopExerciseModel>> getTopExercises({int limit = 5}) async {
     try {
-      final response = await ApiClient.get(
+      final response = await ApiClientLegacy.get(
         '/api/v1/analytics/top-exercises',
         queryParams: {'limit': limit.toString()},
       );
@@ -135,7 +135,7 @@ class AnalyticsDatasource {
     DateTime to,
   ) async {
     try {
-      final response = await ApiClient.get(
+      final response = await ApiClientLegacy.get(
         '/api/v1/analytics/weekly-volume',
         queryParams: {
           'from': from.toUtc().toIso8601String(),
@@ -161,7 +161,7 @@ class AnalyticsDatasource {
     DateTime to,
   ) async {
     try {
-      final response = await ApiClient.get(
+      final response = await ApiClientLegacy.get(
         '/api/v1/analytics/muscle-distribution',
         queryParams: {
           'from': from.toUtc().toIso8601String(),
@@ -186,7 +186,7 @@ class AnalyticsDatasource {
 
   Future<ConsistencyModel> getTrainingDays(DateTime from, DateTime to) async {
     try {
-      final response = await ApiClient.get(
+      final response = await ApiClientLegacy.get(
         '/api/v1/analytics/training-days',
         queryParams: {
           'from': from.toUtc().toIso8601String(),
@@ -221,7 +221,7 @@ class AnalyticsDatasource {
     DateTime to,
   ) async {
     try {
-      final response = await ApiClient.get(
+      final response = await ApiClientLegacy.get(
         '/api/v1/analytics/duration-stats',
         queryParams: {
           'from': from.toUtc().toIso8601String(),
@@ -243,7 +243,7 @@ class AnalyticsDatasource {
 
   Future<VolumeDensityModel> getVolumeDensity() async {
     try {
-      final response = await ApiClient.get('/api/v1/analytics/volume-density');
+      final response = await ApiClientLegacy.get('/api/v1/analytics/volume-density');
       if (response.statusCode != 200) {
         return const VolumeDensityModel(
           currentDensity: 0,
@@ -268,7 +268,7 @@ class AnalyticsDatasource {
     DateTime to,
   ) async {
     try {
-      final response = await ApiClient.get(
+      final response = await ApiClientLegacy.get(
         '/api/v1/analytics/training-style',
         queryParams: {
           'from': from.toUtc().toIso8601String(),
@@ -296,7 +296,7 @@ class AnalyticsDatasource {
 
   Future<WeeklyRhythmModel> getWeeklyRhythm() async {
     try {
-      final response = await ApiClient.get('/api/v1/analytics/weekly-rhythm');
+      final response = await ApiClientLegacy.get('/api/v1/analytics/weekly-rhythm');
       if (response.statusCode != 200) {
         return const WeeklyRhythmModel(
           sessionsByDayOfWeek: [0, 0, 0, 0, 0, 0, 0],

@@ -56,8 +56,9 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
 
     if (confirm != true || !mounted) return;
 
-    final success =
-        await context.read<RoutineProvider>().deleteRoutine(routine.id);
+    final success = await context.read<RoutineProvider>().deleteRoutine(
+      routine.id,
+    );
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -67,8 +68,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
               ? '"${routine.name}" eliminada'
               : 'Error al eliminar la rutina',
         ),
-        backgroundColor:
-            success ? AppTheme.cardBackground : Colors.red,
+        backgroundColor: success ? AppTheme.cardBackground : Colors.red,
       ),
     );
   }
@@ -84,106 +84,142 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
         backgroundColor: AppTheme.appBackground,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh, color: AppTheme.neonGreen),
+            onPressed: () => context.read<RoutineProvider>().refresh(),
+          ),
+          IconButton(
             icon: const Icon(Icons.add, color: AppTheme.neonGreen),
             onPressed: () => context.push('/create-routine'),
           ),
         ],
       ),
-      body: provider.isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.neonGreen),
-            )
-          : provider.error != null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      body: Column(
+        children: [
+          if (provider.isUsingStaleData)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              color: Colors.orange.withValues(alpha: 0.1),
+              child: const Row(
                 children: [
-                  Text(
-                    provider.error!,
-                    style: const TextStyle(color: Colors.redAccent),
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: Colors.orange,
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () =>
-                        context.read<RoutineProvider>().loadRoutines(),
-                    child: const Text('Reintentar'),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Actualizando…',
+                      style: TextStyle(color: Colors.orange, fontSize: 12),
+                    ),
                   ),
                 ],
               ),
-            )
-          : provider.routines.isEmpty
-          ? const Center(
-              child: Text(
-                'No hay rutinas creadas aún.\n¡Creá una nueva!',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.textGrey),
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: () =>
-                  context.read<RoutineProvider>().loadRoutines(),
-              color: AppTheme.neonGreen,
-              backgroundColor: AppTheme.cardBackground,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: provider.routines.length,
-                itemBuilder: (_, i) {
-                  final routine = provider.routines[i];
-                  final exerciseCount = routine.exercises.length;
-
-                  return Card(
-                    color: AppTheme.cardBackground,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      title: Text(
-                        routine.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
+            ),
+          Expanded(
+            child: provider.isLoading && !provider.hasLoadedOnce
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppTheme.neonGreen),
+                  )
+                : provider.errorMessage != null &&
+                      !provider.hasLoadedOnce &&
+                      provider.routines.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          provider.errorMessage!,
+                          style: const TextStyle(color: Colors.redAccent),
+                          textAlign: TextAlign.center,
                         ),
-                      ),
-                      subtitle: Text(
-                        '$exerciseCount ejercicio${exerciseCount != 1 ? 's' : ''}',
-                        style: const TextStyle(color: AppTheme.textGrey),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.redAccent,
-                            ),
-                            onPressed: () => _deleteRoutine(routine),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () =>
+                              context.read<RoutineProvider>().loadRoutines(),
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  )
+                : provider.routines.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No hay rutinas creadas aún.\n¡Creá una nueva!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppTheme.textGrey),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: () => context.read<RoutineProvider>().refresh(),
+                    color: AppTheme.neonGreen,
+                    backgroundColor: AppTheme.cardBackground,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: provider.routines.length,
+                      itemBuilder: (_, i) {
+                        final routine = provider.routines[i];
+                        final exerciseCount = routine.exercises.length;
+
+                        return Card(
+                          color: AppTheme.cardBackground,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          const Icon(
-                            Icons.chevron_right,
-                            color: AppTheme.textGrey,
-                          ),
-                        ],
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => RoutineDetailScreen(
-                              routine: routine,
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
                             ),
+                            title: Text(
+                              routine.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '$exerciseCount ejercicio${exerciseCount != 1 ? 's' : ''}',
+                              style: const TextStyle(color: AppTheme.textGrey),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.redAccent,
+                                  ),
+                                  onPressed: () => _deleteRoutine(routine),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right,
+                                  color: AppTheme.textGrey,
+                                ),
+                              ],
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      RoutineDetailScreen(routine: routine),
+                                ),
+                              );
+                            },
                           ),
                         );
                       },
                     ),
-                  );
-                },
-              ),
-            ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
