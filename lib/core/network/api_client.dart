@@ -22,9 +22,17 @@ abstract class ApiClient {
     CancelToken? cancelToken,
   });
 
-  Future<HttpResponse> post(String path, {Object? body, CancelToken? cancelToken});
+  Future<HttpResponse> post(
+    String path, {
+    Object? body,
+    CancelToken? cancelToken,
+  });
 
-  Future<HttpResponse> put(String path, {Object? body, CancelToken? cancelToken});
+  Future<HttpResponse> put(
+    String path, {
+    Object? body,
+    CancelToken? cancelToken,
+  });
 
   Future<HttpResponse> delete(String path, {CancelToken? cancelToken});
 
@@ -35,13 +43,19 @@ abstract class ApiClient {
     Map<String, String>? queryParams,
     CancelToken? cancelToken,
   }) async {
-    debugPrint('[ApiClient] DEPRECATED static call: ApiClient.getLegacy($path)');
+    debugPrint(
+      '[ApiClient] DEPRECATED static call: ApiClient.getLegacy($path)',
+    );
     final response = await _legacyInstance.get(
       path,
       queryParams: queryParams,
       cancelToken: cancelToken,
     );
-    return http.Response.bytes(response.bodyBytes, response.statusCode, headers: response.headers);
+    return http.Response.bytes(
+      response.bodyBytes,
+      response.statusCode,
+      headers: response.headers,
+    );
   }
 
   static Future<http.Response> postLegacy(
@@ -49,9 +63,19 @@ abstract class ApiClient {
     Object? body,
     CancelToken? cancelToken,
   }) async {
-    debugPrint('[ApiClient] DEPRECATED static call: ApiClient.postLegacy($path)');
-    final response = await _legacyInstance.post(path, body: body, cancelToken: cancelToken);
-    return http.Response.bytes(response.bodyBytes, response.statusCode, headers: response.headers);
+    debugPrint(
+      '[ApiClient] DEPRECATED static call: ApiClient.postLegacy($path)',
+    );
+    final response = await _legacyInstance.post(
+      path,
+      body: body,
+      cancelToken: cancelToken,
+    );
+    return http.Response.bytes(
+      response.bodyBytes,
+      response.statusCode,
+      headers: response.headers,
+    );
   }
 
   static Future<http.Response> putLegacy(
@@ -59,25 +83,42 @@ abstract class ApiClient {
     Object? body,
     CancelToken? cancelToken,
   }) async {
-    debugPrint('[ApiClient] DEPRECATED static call: ApiClient.putLegacy($path)');
-    final response = await _legacyInstance.put(path, body: body, cancelToken: cancelToken);
-    return http.Response.bytes(response.bodyBytes, response.statusCode, headers: response.headers);
+    debugPrint(
+      '[ApiClient] DEPRECATED static call: ApiClient.putLegacy($path)',
+    );
+    final response = await _legacyInstance.put(
+      path,
+      body: body,
+      cancelToken: cancelToken,
+    );
+    return http.Response.bytes(
+      response.bodyBytes,
+      response.statusCode,
+      headers: response.headers,
+    );
   }
 
   static Future<http.Response> deleteLegacy(
     String path, {
     CancelToken? cancelToken,
   }) async {
-    debugPrint('[ApiClient] DEPRECATED static call: ApiClient.deleteLegacy($path)');
-    final response = await _legacyInstance.delete(path, cancelToken: cancelToken);
-    return http.Response.bytes(response.bodyBytes, response.statusCode, headers: response.headers);
+    debugPrint(
+      '[ApiClient] DEPRECATED static call: ApiClient.deleteLegacy($path)',
+    );
+    final response = await _legacyInstance.delete(
+      path,
+      cancelToken: cancelToken,
+    );
+    return http.Response.bytes(
+      response.bodyBytes,
+      response.statusCode,
+      headers: response.headers,
+    );
   }
 }
 
 class HttpApiClient implements ApiClient {
   static const String _envUrl = String.fromEnvironment('BACKEND_URL');
-  static const String _physicalDeviceIp =
-      '192.168.10.162'; // Fallback si no hay env
 
   // Configuración de reintentos
   static const int _maxRetries = 3;
@@ -87,39 +128,36 @@ class HttpApiClient implements ApiClient {
   static const Duration _standardTimeout = Duration(seconds: 30);
   static const Duration _uploadTimeout = Duration(seconds: 60);
 
-  static bool get _isIosSimulator =>
-      !kIsWeb &&
-      Platform.isIOS &&
-      Platform.environment.containsKey('SIMULATOR_DEVICE_NAME');
-
-  static String _getHostForPhysicalDevice() {
-    // Prioridad de resolución:
-    // 1. BACKEND_URL env var (manual override)
-    // 2. localhost:8080 (por si el backend está en el mismo Mac en modo bridge)
-    // 3. La IP registrada (fallback)
-    if (_envUrl.isNotEmpty) {
-      _log('Using BACKEND_URL from environment: $_envUrl');
-      return _envUrl;
+  static String resolveBaseUrl({
+    required bool isWeb,
+    required bool isAndroid,
+    required bool isIos,
+    required String envUrl,
+  }) {
+    if (envUrl.isNotEmpty) {
+      return envUrl;
     }
-    // Nota: Para iPhone físico, el simulador puede acceder a localhost en el Mac
-    // Si esto no funciona, pasa: flutter run --dart-define=BACKEND_URL=http://192.168.10.162:8080
-    return _physicalDeviceIp;
+    if (isWeb) return 'http://localhost:8080';
+    if (isAndroid) return 'http://10.0.2.2:8080';
+    if (isIos) return 'http://localhost:8080';
+    return 'http://localhost:8080';
   }
 
   static String get _baseUrl {
+    final baseUrl = resolveBaseUrl(
+      isWeb: kIsWeb,
+      isAndroid: !kIsWeb && Platform.isAndroid,
+      isIos: !kIsWeb && Platform.isIOS,
+      envUrl: _envUrl,
+    );
+
     if (_envUrl.isNotEmpty) {
       _log('Using BACKEND_URL from environment: $_envUrl');
-      return _envUrl;
+    } else if (!kIsWeb && Platform.isIOS) {
+      _log('iOS detected without BACKEND_URL - using localhost:8080');
     }
-    if (kIsWeb) return 'http://localhost:8080';
-    if (Platform.isAndroid) return 'http://10.0.2.2:8080';
-    if (_isIosSimulator) return 'http://localhost:8080';
-    if (Platform.isIOS) {
-      final host = _getHostForPhysicalDevice();
-      _log('iOS Physical Device - Using host: $host');
-      return 'http://$host:8080';
-    }
-    return 'http://localhost:8080'; // macOS desktop
+
+    return baseUrl;
   }
 
   static void _log(String message) {
@@ -221,7 +259,11 @@ class HttpApiClient implements ApiClient {
       cancelToken,
     );
     _mapError(response);
-    return HttpResponse(statusCode: response.statusCode, bodyBytes: response.bodyBytes, headers: response.headers);
+    return HttpResponse(
+      statusCode: response.statusCode,
+      bodyBytes: response.bodyBytes,
+      headers: response.headers,
+    );
   }
 
   @override
@@ -243,14 +285,15 @@ class HttpApiClient implements ApiClient {
       cancelToken,
     );
     _mapError(response);
-    return HttpResponse(statusCode: response.statusCode, bodyBytes: response.bodyBytes, headers: response.headers);
+    return HttpResponse(
+      statusCode: response.statusCode,
+      bodyBytes: response.bodyBytes,
+      headers: response.headers,
+    );
   }
 
   @override
-  Future<HttpResponse> delete(
-    String path, {
-    CancelToken? cancelToken,
-  }) async {
+  Future<HttpResponse> delete(String path, {CancelToken? cancelToken}) async {
     final response = await _executeWithRetry(
       () => http
           .delete(Uri.parse('$_baseUrl$path'), headers: _headers())
@@ -260,7 +303,11 @@ class HttpApiClient implements ApiClient {
       cancelToken,
     );
     _mapError(response);
-    return HttpResponse(statusCode: response.statusCode, bodyBytes: response.bodyBytes, headers: response.headers);
+    return HttpResponse(
+      statusCode: response.statusCode,
+      bodyBytes: response.bodyBytes,
+      headers: response.headers,
+    );
   }
 
   Future<http.Response> postMultipart(
@@ -302,7 +349,10 @@ class HttpApiClient implements ApiClient {
       if (body.isEmpty) return null;
       return jsonDecode(body);
     } on FormatException {
-      throw const ServerErrorException(500, 'Invalid UTF-8 or malformed JSON response');
+      throw const ServerErrorException(
+        500,
+        'Invalid UTF-8 or malformed JSON response',
+      );
     }
   }
 
@@ -315,7 +365,10 @@ class HttpApiClient implements ApiClient {
     if (status >= 500) throw ServerErrorException(status);
     if (status == 408) throw const ApiTimeoutException();
 
-    throw GenericApiException('Request failed with status code $status', statusCode: status);
+    throw GenericApiException(
+      'Request failed with status code $status',
+      statusCode: status,
+    );
   }
 }
 
@@ -325,7 +378,11 @@ class ApiClientLegacy {
     Map<String, String>? queryParams,
     CancelToken? cancelToken,
   }) {
-    return ApiClient.getLegacy(path, queryParams: queryParams, cancelToken: cancelToken);
+    return ApiClient.getLegacy(
+      path,
+      queryParams: queryParams,
+      cancelToken: cancelToken,
+    );
   }
 
   static Future<http.Response> post(
@@ -344,10 +401,7 @@ class ApiClientLegacy {
     return ApiClient.putLegacy(path, body: body, cancelToken: cancelToken);
   }
 
-  static Future<http.Response> delete(
-    String path, {
-    CancelToken? cancelToken,
-  }) {
+  static Future<http.Response> delete(String path, {CancelToken? cancelToken}) {
     return ApiClient.deleteLegacy(path, cancelToken: cancelToken);
   }
 
